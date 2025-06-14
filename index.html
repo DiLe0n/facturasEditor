@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Facturas Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="refacciones.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Gestor de Facturas</h1>
+            <p>Edita y gestiona tus datos de Excel de forma sencilla</p>
+        </div>
+
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv">
+                <label for="fileInput" class="file-button">
+                    📁 Seleccionar archivo (Excel o CSV)
+                </label>
+            </div>
+            <div id="fileName" style="margin-top: 10px; color: #666;"></div>
+            
+            <div class="password-section">
+                <input type="password" id="passwordInput" class="password-input" placeholder="Contraseña del archivo" value="FACTURAS+1">
+                <button id="processButton" class="process-button" disabled>
+                    Procesar archivo
+                </button>
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <div class="data-section" id="dataSection">
+            <div class="controls">
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar en la tabla...">
+                <button id="addButton" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar registro</button>
+                <button id="saveButton" class="save-button">💾 Guardar cambios</button>
+                <span id="recordCount" style="color: #666; font-weight: 600;"></span>
+            </div>
+            <div class="table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Tipo</th>
+                            <th>Nº Factura</th>
+                            <th>Referencia</th>
+                            <th>Fecha Factura</th>
+                            <th>Vencimiento</th>
+                            <th>Moneda</th>
+                            <th>Importe</th>
+                            <th>Pago</th>
+                            <th>Balance</th>
+                            <th>Editar</th> <!-- NUEVA COLUMNA -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar registro -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h3>📝 Editar Registro</h3>
+            <div class="form-group">
+                <label>Color del registro:</label>
+                <div class="color-options">
+                    <div class="color-option color-none" data-color="none" title="Sin color"></div>
+                    <div class="color-option color-red" data-color="red" title="Rojo"></div>
+                    <div class="color-option color-yellow" data-color="yellow" title="Amarillo"></div>
+                    <div class="color-option color-green" data-color="green" title="Verde"></div>
+                    <div class="color-option color-blue" data-color="blue" title="Azul"></div>
+                    <div class="color-option color-orange" data-color="orange" title="Naranja"></div>
+                    <div class="color-option color-purple" data-color="purple" title="Morado"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Monto pagado:</label>
+                <input type="text" id="editPago" placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label>¿Quién realizó el pago?:</label>
+                <input type="text" id="editQuien" placeholder="Nombre de la persona">
+            </div>
+            <div class="form-group">
+                <label>Pendiente por pagar:</label>
+                <input type="text" id="editPendiente" placeholder="0.00">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeModal()">Cancelar</button>
+                <button class="modal-button primary" onclick="saveEdit()">Guardar</button>
+            </div>
+        </div>
+    </div>
+    <script src="refacciones.js"></script>
+</body>
+</html>
