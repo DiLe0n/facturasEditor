@@ -34,32 +34,139 @@
         </div>
 
         <div class="data-section" id="dataSection">
-            <div class="controls">
-                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar en la tabla...">
-                <button id="addButton" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar registro</button>
-                <button id="saveButton" class="save-button">💾 Guardar cambios</button>
-                <span id="recordCount" style="color: #666; font-weight: 600;"></span>
+            <!-- Pestañas para las diferentes categorías -->
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" data-category="creditos">
+                        🏦 Créditos <span class="tab-count" id="creditosCount">0</span>
+                    </button>
+                    <button class="tab" data-category="servicios">
+                        🔧 Servicios <span class="tab-count" id="serviciosCount">0</span>
+                    </button>
+                    <button class="tab" data-category="stock">
+                        📦 Stock <span class="tab-count" id="stockCount">0</span>
+                    </button>
+                    <button class="tab" data-category="otros">
+                        📋 Otros <span class="tab-count" id="otrosCount">0</span>
+                    </button>
+                </div>
             </div>
-            <div class="table-container">
-                <table id="dataTable">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>Tipo</th>
-                            <th>Nº Factura</th>
-                            <th>Referencia</th>
-                            <th>Fecha Factura</th>
-                            <th>Vencimiento</th>
-                            <th>Moneda</th>
-                            <th>Importe</th>
-                            <th>Pago</th>
-                            <th>Balance</th>
-                            <th>Editar</th> <!-- NUEVA COLUMNA -->
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                    </tbody>
-                </table>
+
+            <!-- Contenido de cada pestaña -->
+            <div id="creditos" class="tab-content active">
+                <div class="controls">
+                    <input type="text" id="searchInputCreditos" class="search-input" placeholder="🔍 Buscar en créditos...">
+                    <button id="addButtonCreditos" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar crédito</button>
+                    <button id="saveButtonCreditos" class="save-button">💾 Guardar créditos</button>
+                </div>
+                <div class="table-container">
+                    <table id="dataTableCreditos">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyCreditos">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="servicios" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputServicios" class="search-input" placeholder="🔍 Buscar en servicios...">
+                    <button id="addButtonServicios" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar servicio</button>
+                    <button id="saveButtonServicios" class="save-button">💾 Guardar servicios</button>
+                </div>
+                <div class="table-container">
+                    <table id="dataTableServicios">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyServicios">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="stock" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputStock" class="search-input" placeholder="🔍 Buscar en stock...">
+                    <button id="addButtonStock" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar stock</button>
+                    <button id="saveButtonStock" class="save-button">💾 Guardar stock</button>
+                </div>
+                <div class="table-container">
+                    <table id="dataTableStock">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyStock">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="otros" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputOtros" class="search-input" placeholder="🔍 Buscar en otros...">
+                    <button id="addButtonOtros" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar otro</button>
+                    <button id="saveButtonOtros" class="save-button">💾 Guardar otros</button>
+                </div>
+                <div class="table-container">
+                    <table id="dataTableOtros">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyOtros">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

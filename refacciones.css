@@ -1,4 +1,4 @@
-        /* Paleta personalizada */
+/* Paleta personalizada */
         :root {
             --azul: #392677;
             --amarillo1: #ffd21e;
@@ -23,7 +23,7 @@
 
         /* Contenedor principal */
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: rgba(255,255,255,0.97);
             backdrop-filter: blur(10px);
@@ -123,6 +123,60 @@
         .data-section {
             padding: 40px;
             display: none;
+        }
+
+        /* Nuevos estilos para las pestañas */
+        .tabs-container {
+            border-bottom: 2px solid #eee;
+            margin-bottom: 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+        }
+
+        .tab {
+            padding: 15px 25px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border-radius: 8px 8px 0 0;
+            margin-right: 2px;
+            position: relative;
+        }
+
+        .tab.active {
+            background: var(--azul);
+            color: var(--blanco);
+        }
+
+        .tab:hover:not(.active) {
+            background: var(--amarillo2);
+        }
+
+        .tab-count {
+            background: rgba(255,255,255,0.8);
+            color: var(--azul);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+
+        .tab.active .tab-count {
+            background: var(--amarillo1);
+            color: var(--azul);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         .controls {
@@ -432,5 +486,14 @@
             
             .search-input {
                 width: 100%;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .tab {
+                flex: 1;
+                min-width: 120px;
             }
         }
