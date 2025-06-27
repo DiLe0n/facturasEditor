@@ -1,10 +1,13 @@
-/* Paleta personalizada */
+/* ==================== VARIABLES Y RESET ==================== */
         :root {
             --azul: #392677;
             --amarillo1: #ffd21e;
             --amarillo2: #ffef1e;
             --gris: #919191;
             --blanco: #ffffff;
+            --sombra-principal: 0 20px 40px rgba(0, 0, 0, 0.1);
+            --sombra-hover: 0 6px 20px rgba(0, 0, 0, 0.15);
+            --transicion-suave: all 0.3s ease;
         }
 
         * {
@@ -13,7 +16,7 @@
             box-sizing: border-box;
         }
 
-        /* Fondo general */
+        /* ==================== LAYOUT PRINCIPAL ==================== */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, var(--azul) 0%, var(--amarillo1) 100%);
@@ -21,18 +24,17 @@
             padding: 20px;
         }
 
-        /* Contenedor principal */
         .container {
             max-width: 1400px;
             margin: 0 auto;
             background: rgba(255,255,255,0.97);
             backdrop-filter: blur(10px);
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--sombra-principal);
             overflow: hidden;
         }
 
-        /* Encabezado */
+        /* ==================== ENCABEZADO ==================== */
         .header {
             background: var(--azul);
             padding: 30px;
@@ -51,6 +53,7 @@
             opacity: 0.9;
         }
 
+        /* ==================== SECCIÓN DE CARGA ==================== */
         .upload-section {
             padding: 40px;
             text-align: center;
@@ -71,31 +74,13 @@
             cursor: pointer;
         }
 
-        .file-button,
-        .save-button,
-        .process-button {
-            display: inline-block;
-            padding: 15px 30px;
-            background: var(--azul);
-            color: var(--blanco);
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1.1rem;
-            font-weight: 600;
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-        }
-
-        .file-button:hover,
-        .save-button:hover,
-        .process-button:hover {
-            background: var(--amarillo1);
-            color: var(--azul);
-        }
-
         .password-section {
             margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
         }
 
         .password-input {
@@ -104,8 +89,7 @@
             border-radius: 25px;
             font-size: 1rem;
             width: 250px;
-            margin-right: 15px;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
         }
 
         .password-input:focus {
@@ -114,18 +98,59 @@
             box-shadow: 0 0 0 3px var(--amarillo2);
         }
 
+        #fileName {
+            margin-top: 10px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* ==================== BOTONES ==================== */
+        .file-button,
+        .save-button,
+        .process-button,
+        .modal-button {
+            display: inline-block;
+            padding: 15px 30px;
+            background: var(--azul);
+            color: var(--blanco);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: var(--transicion-suave);
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            text-decoration: none;
+        }
+
+        .file-button:hover,
+        .save-button:hover,
+        .process-button:hover,
+        .modal-button:hover {
+            background: var(--amarillo1);
+            color: var(--azul);
+            transform: translateY(-2px);
+            box-shadow: var(--sombra-hover);
+        }
+
         .process-button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
 
+        .save-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border-radius: 20px;
+        }
+
+        /* ==================== PESTAÑAS ==================== */
         .data-section {
             padding: 40px;
             display: none;
         }
 
-        /* Nuevos estilos para las pestañas */
         .tabs-container {
             border-bottom: 2px solid #eee;
             margin-bottom: 30px;
@@ -133,7 +158,8 @@
 
         .tabs {
             display: flex;
-            gap: 0;
+            gap: 2px;
+            flex-wrap: wrap;
         }
 
         .tab {
@@ -142,10 +168,11 @@
             border: none;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
             border-radius: 8px 8px 0 0;
-            margin-right: 2px;
             position: relative;
+            flex: 1;
+            min-width: 150px;
         }
 
         .tab.active {
@@ -179,6 +206,7 @@
             display: block;
         }
 
+        /* ==================== CONTROLES Y FORMULARIOS ==================== */
         .controls {
             margin-bottom: 30px;
             display: flex;
@@ -194,7 +222,7 @@
             border-radius: 20px;
             font-size: 1rem;
             width: 300px;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
             background: var(--blanco);
             color: var(--azul);
         }
@@ -206,22 +234,32 @@
             box-shadow: 0 0 0 3px var(--amarillo2);
         }
 
-        .save-button {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            color: var(--blanco);
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
+        .week-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+            flex-wrap: wrap;
         }
 
-        .save-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(17, 153, 142, 0.3);
+        .group-select,
+        .sort-select {
+            padding: 8px 12px;
+            border: 2px solid var(--gris);
+            border-radius: 15px;
+            font-size: 0.9rem;
+            background: var(--blanco);
+            color: var(--azul);
+            transition: var(--transicion-suave);
         }
 
+        .group-select:focus,
+        .sort-select:focus {
+            outline: none;
+            border-color: var(--azul);
+        }
+
+        /* ==================== TABLAS ==================== */
         .table-container {
             overflow-x: auto;
             border-radius: 15px;
@@ -248,12 +286,22 @@
         td {
             padding: 12px;
             border-bottom: 1px solid #eee;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
         }
 
         tr:hover {
             background-color: var(--amarillo2);
             transform: scale(1.01);
+        }
+
+        .clickable-row {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .clickable-row:hover {
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
         .editable {
@@ -269,42 +317,7 @@
             border-radius: 4px;
         }
 
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            font-weight: 600;
-        }
-
-        .status.success {
-            background-color: #eafbe0;
-            color: var(--azul);
-            border: 1px solid var(--azul);
-        }
-
-        .status.error {
-            background-color: #fff3cd;
-            color: var(--azul);
-            border: 1px solid var(--amarillo1);
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--azul);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-left: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
+        /* ==================== ESTILOS DE DATOS ==================== */
         .money {
             text-align: right;
             font-weight: 600;
@@ -318,6 +331,25 @@
             color: #28a745;
         }
 
+        .week-header {
+            background: var(--azul);
+            color: var(--blanco);
+            padding: 15px 20px;
+            margin: 20px 0 10px 0;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .week-summary {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* ==================== COLORES DE FILAS ==================== */
         .row-red { background-color: #ffebee !important; }
         .row-yellow { background-color: #fff9c4 !important; }
         .row-green { background-color: #e8f5e8 !important; }
@@ -325,6 +357,7 @@
         .row-orange { background-color: #fff3e0 !important; }
         .row-purple { background-color: #f3e5f5 !important; }
 
+        /* ==================== MODAL ==================== */
         .modal {
             display: none;
             position: fixed;
@@ -381,11 +414,6 @@
             color: var(--azul);
         }
 
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--azul);
-        }
-
         .color-options {
             display: flex;
             gap: 10px;
@@ -399,7 +427,7 @@
             border-radius: 50%;
             border: 3px solid transparent;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
         }
 
         .color-option:hover {
@@ -437,7 +465,7 @@
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s ease;
+            transition: var(--transicion-suave);
         }
 
         .modal-button.primary {
@@ -450,24 +478,68 @@
             color: var(--blanco);
         }
 
-        .modal-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        /* ==================== ESTADOS Y MENSAJES ==================== */
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
         }
 
-        .clickable-row {
-            cursor: pointer;
-            transition: all 0.2s ease;
+        .status.success {
+            background-color: #eafbe0;
+            color: var(--azul);
+            border: 1px solid var(--azul);
         }
 
-        .clickable-row:hover {
-            transform: scale(1.02);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        .status.error {
+            background-color: #fff3cd;
+            color: var(--azul);
+            border: 1px solid var(--amarillo1);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--azul);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .record-count {
+            font-size: 0.9rem;
+            color: var(--gris);
+            margin-bottom: 15px;
+        }
+
+        /* ==================== RESPONSIVE DESIGN ==================== */
+        @media (max-width: 1200px) {
+            .week-controls {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+            
+            .controls {
+                justify-content: space-between;
+            }
         }
 
         @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
             .container {
-                margin: 10px;
+                margin: 0;
                 border-radius: 15px;
             }
             
@@ -475,13 +547,15 @@
                 font-size: 2rem;
             }
             
-            .upload-section, .data-section {
+            .upload-section, 
+            .data-section {
                 padding: 20px;
             }
             
             .controls {
                 flex-direction: column;
                 align-items: stretch;
+                gap: 10px;
             }
             
             .search-input {
@@ -489,45 +563,74 @@
             }
 
             .tabs {
-                flex-wrap: wrap;
+                flex-direction: column;
             }
 
             .tab {
-                flex: 1;
-                min-width: 120px;
+                border-radius: 8px;
+                margin-bottom: 2px;
+                flex: none;
+            }
+
+            .week-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+                margin-left: 0;
+            }
+
+            .password-section {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .password-input {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            th, td {
+                padding: 8px 6px;
+                font-size: 0.85rem;
+            }
+
+            .modal-content {
+                margin: 5% auto;
+                width: 95%;
+                padding: 20px;
+            }
+
+            .modal-buttons {
+                flex-direction: column;
+                gap: 10px;
             }
         }
 
-        .week-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-left: auto;
-        }
+        @media (max-width: 480px) {
+            .header {
+                padding: 20px;
+            }
 
-        .group-select, .sort-select {
-            padding: 8px 12px;
-            border: 2px solid var(--gris);
-            border-radius: 15px;
-            font-size: 0.9rem;
-            background: var(--blanco);
-            color: var(--azul);
-        }
+            .header h1 {
+                font-size: 1.8rem;
+            }
 
-        .week-header {
-            background: var(--azul);
-            color: var(--blanco);
-            padding: 15px 20px;
-            margin: 20px 0 10px 0;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+            .upload-section,
+            .data-section {
+                padding: 15px;
+            }
 
-        .week-summary {
-            font-size: 0.9rem;
-            opacity: 0.9;
+            .file-button,
+            .process-button {
+                padding: 12px 20px;
+                font-size: 1rem;
+            }
+
+            table {
+                font-size: 0.8rem;
+            }
+
+            th, td {
+                padding: 6px 4px;
+            }
         }

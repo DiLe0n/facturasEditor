@@ -58,7 +58,24 @@
                     <input type="text" id="searchInputCreditos" class="search-input" placeholder="🔍 Buscar en créditos...">
                     <button id="addButtonCreditos" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar crédito</button>
                     <button id="saveButtonCreditos" class="save-button">💾 Guardar créditos</button>
+                    
+                    <!-- CONTROLES DE AGRUPACIÓN PARA CRÉDITOS -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByCreditos" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByCreditos" class="sort-select">
+                            <option value="date-desc">Fecha ↓</option>
+                            <option value="date-asc">Fecha ↑</option>
+                            <option value="amount-desc">Monto ↓</option>
+                            <option value="amount-asc">Monto ↑</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="recordCountCreditos" class="record-count"></div>
                 <div class="table-container">
                     <table id="dataTableCreditos">
                         <thead>
@@ -87,7 +104,24 @@
                     <input type="text" id="searchInputServicios" class="search-input" placeholder="🔍 Buscar en servicios...">
                     <button id="addButtonServicios" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar servicio</button>
                     <button id="saveButtonServicios" class="save-button">💾 Guardar servicios</button>
+                    
+                    <!-- CONTROLES DE AGRUPACIÓN PARA SERVICIOS -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByServicios" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByServicios" class="sort-select">
+                            <option value="date-desc">Fecha ↓</option>
+                            <option value="date-asc">Fecha ↑</option>
+                            <option value="amount-desc">Monto ↓</option>
+                            <option value="amount-asc">Monto ↑</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="recordCountServicios" class="record-count"></div>
                 <div class="table-container">
                     <table id="dataTableServicios">
                         <thead>
@@ -116,7 +150,24 @@
                     <input type="text" id="searchInputStock" class="search-input" placeholder="🔍 Buscar en stock...">
                     <button id="addButtonStock" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar stock</button>
                     <button id="saveButtonStock" class="save-button">💾 Guardar stock</button>
+                    
+                    <!-- CONTROLES DE AGRUPACIÓN PARA STOCK -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByStock" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByStock" class="sort-select">
+                            <option value="date-desc">Fecha ↓</option>
+                            <option value="date-asc">Fecha ↑</option>
+                            <option value="amount-desc">Monto ↓</option>
+                            <option value="amount-asc">Monto ↑</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="recordCountStock" class="record-count"></div>
                 <div class="table-container">
                     <table id="dataTableStock">
                         <thead>
@@ -145,7 +196,24 @@
                     <input type="text" id="searchInputOtros" class="search-input" placeholder="🔍 Buscar en otros...">
                     <button id="addButtonOtros" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar otro</button>
                     <button id="saveButtonOtros" class="save-button">💾 Guardar otros</button>
+                    
+                    <!-- CONTROLES DE AGRUPACIÓN PARA OTROS -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByOtros" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByOtros" class="sort-select">
+                            <option value="date-desc">Fecha ↓</option>
+                            <option value="date-asc">Fecha ↑</option>
+                            <option value="amount-desc">Monto ↓</option>
+                            <option value="amount-asc">Monto ↑</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="recordCountOtros" class="record-count"></div>
                 <div class="table-container">
                     <table id="dataTableOtros">
                         <thead>
@@ -206,20 +274,6 @@
         </div>
     </div>
 
-    <div class="week-controls">
-        <label>Agrupar por:</label>
-        <select id="groupBy[Category]" class="group-select">
-            <option value="none">Sin agrupar</option>
-            <option value="week">Por semana</option>
-            <option value="month">Por mes</option>
-        </select>
-        <select id="sortBy[Category]" class="sort-select">
-            <option value="date-asc">Fecha ↑</option>
-            <option value="date-desc">Fecha ↓</option>
-            <option value="amount-asc">Monto ↑</option>
-            <option value="amount-desc">Monto ↓</option>
-        </select>
-    </div>
     <script src="refacciones.js"></script>
 </body>
 </html>

@@ -420,7 +420,9 @@ function getISOWeekInfo(date) {
 function getWeekRange(date) {
     // Get Monday of the week
     const d = new Date(date);
-    const day = d.getDay() || 7; // Sunday is 7
+    const day = d.getDay();
+    const monday = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(monday);
     d.setDate(d.getDate() - day + 1);
     const startOfWeek = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const endOfWeek = new Date(startOfWeek);
