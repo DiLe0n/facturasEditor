@@ -10,6 +10,19 @@ let filteredData = {
     stock: [],
     otros: []
 };
+let groupingOptions = {
+    creditos: 'none',
+    servicios: 'none',
+    stock: 'none',
+    otros: 'none'
+};
+
+let sortingOptions = {
+    creditos: 'date-desc',
+    servicios: 'date-desc',
+    stock: 'date-desc',
+    otros: 'date-desc'
+};
 let currentEditingId = null;
 let currentCategory = 'creditos';
 
@@ -26,6 +39,37 @@ document.querySelectorAll('.tab').forEach(tab => {
         const category = this.dataset.category;
         switchTab(category);
     });
+});
+
+// Add this check at the beginning of your script
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if all required elements exist
+    const requiredElements = ['fileInput', 'passwordInput', 'processButton', 'dataSection', 'status', 'fileName'];
+    const missingElements = requiredElements.filter(id => !document.getElementById(id));
+    
+    if (missingElements.length > 0) {
+        console.error('Missing elements:', missingElements);
+    }
+});
+
+// Add event listeners for grouping controls
+['creditos', 'servicios', 'stock', 'otros'].forEach(category => {
+    const groupSelect = document.getElementById(`groupBy${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const sortSelect = document.getElementById(`sortBy${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    
+    if (groupSelect) {
+        groupSelect.addEventListener('change', (e) => {
+            groupingOptions[category] = e.target.value;
+            renderTable(category);
+        });
+    }
+    
+    if (sortSelect) {
+        sortSelect.addEventListener('change', (e) => {
+            sortingOptions[category] = e.target.value;
+            renderTable(category);
+        });
+    }
 });
 
 // Event listeners para cada categoría
@@ -204,6 +248,7 @@ async function processFile() {
         
         const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
         showStatus(`Archivo procesado exitosamente. ${totalRecords} registros categorizados: Créditos(${allData.creditos.length}), Servicios(${allData.servicios.length}), Stock(${allData.stock.length}), Otros(${allData.otros.length})`, 'success');
+        updateTabCounts();
         
     } catch (error) {
         console.error('Error completo:', error);
@@ -326,6 +371,143 @@ function showManualEntry() {
     switchTab('creditos');
     dataSection.style.display = 'block';
     showStatus('Datos de ejemplo cargados y categorizados. Puedes editarlos y agregar más registros.', 'success');
+    updateTabCounts();
+}
+
+// Helper functions for date handling
+function parseDate(dateStr) {
+    if (!dateStr || dateStr === '') return new Date();
+    
+    // Handle different date formats
+    const formats = [
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})/,  // DD/MM/YYYY or MM/DD/YYYY
+        /(\d{4})-(\d{1,2})-(\d{1,2})/,   // YYYY-MM-DD
+        /(\d{1,2})-(\d{1,2})-(\d{4})/    // DD-MM-YYYY or MM-DD-YYYY
+    ];
+    
+    for (let format of formats) {
+        const match = dateStr.match(format);
+        if (match) {
+            // Assume DD/MM/YYYY format for the first pattern
+            if (format === formats[0]) {
+                return new Date(match[3], match[2] - 1, match[1]);
+            } else if (format === formats[1]) {
+                return new Date(match[1], match[2] - 1, match[3]);
+            } else {
+                return new Date(match[3], match[2] - 1, match[1]);
+            }
+        }
+    }
+    
+    return new Date(dateStr) || new Date();
+}
+
+// Helper: Get ISO week number and year
+function getISOWeekInfo(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    // Set to nearest Thursday: current date + 4 - current day number
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    // Get first day of year
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    // Calculate week number
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return {
+        year: d.getUTCFullYear(),
+        week: weekNo
+    };
+}
+
+function getWeekRange(date) {
+    // Get Monday of the week
+    const d = new Date(date);
+    const day = d.getDay() || 7; // Sunday is 7
+    d.setDate(d.getDate() - day + 1);
+    const startOfWeek = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    // Get ISO week info
+    const { year, week } = getISOWeekInfo(date);
+
+    return {
+        start: startOfWeek,
+        end: endOfWeek,
+        label: `Semana ${week} (${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()})`,
+        key: `${year}-W${week}`
+    };
+}
+
+function getMonthRange(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    
+    return {
+        start: new Date(year, month, 1),
+        end: new Date(year, month + 1, 0),
+        label: `${monthNames[month]} ${year}`
+    };
+}
+
+function sortRecords(records, sortBy) {
+    return [...records].sort((a, b) => {
+        switch (sortBy) {
+            case 'date-asc':
+                return parseDate(a.fechaFactura) - parseDate(b.fechaFactura);
+            case 'date-desc':
+                return parseDate(b.fechaFactura) - parseDate(a.fechaFactura);
+            case 'amount-asc':
+                return parseFloat(a.importe.replace(/,/g, '')) - parseFloat(b.importe.replace(/,/g, ''));
+            case 'amount-desc':
+                return parseFloat(b.importe.replace(/,/g, '')) - parseFloat(a.importe.replace(/,/g, ''));
+            default:
+                return 0;
+        }
+    });
+}
+
+function groupRecordsByPeriod(records, groupBy) {
+    if (groupBy === 'none') {
+        return [{ label: 'Todos los registros', records: records, summary: '' }];
+    }
+
+    const groups = {};
+
+    records.forEach(record => {
+        const date = parseDate(record.fechaFactura);
+        let key, range;
+
+        if (groupBy === 'week') {
+            range = getWeekRange(date);
+            key = range.key;
+        } else if (groupBy === 'month') {
+            range = getMonthRange(date);
+            key = `${range.start.getFullYear()}-${range.start.getMonth()}`;
+        }
+
+        if (!groups[key]) {
+            groups[key] = {
+                label: range.label,
+                records: [],
+                start: range.start,
+                totalAmount: 0,
+                count: 0
+            };
+        }
+
+        groups[key].records.push(record);
+        groups[key].totalAmount += parseFloat(record.importe.replace(/,/g, '') || 0);
+        groups[key].count++;
+    });
+
+    // Convert to array and sort by date
+    return Object.values(groups)
+        .sort((a, b) => b.start - a.start)
+        .map(group => ({
+            ...group,
+            summary: `${group.count} registros - Total: $${group.totalAmount.toLocaleString()}`
+        }));
 }
 
 function renderTable(category = currentCategory) {
@@ -336,60 +518,77 @@ function renderTable(category = currentCategory) {
 
     tableBody.innerHTML = '';
     
-    filteredData[category].forEach((row) => {
-        const tr = document.createElement('tr');
-
-        // Asigna la clase de color a la fila si tiene color
-        let colorClass = '';
-        if (row.color && row.color !== 'none') {
-            colorClass = `row-${row.color}`;
+    // Sort and group records
+    const sortedRecords = sortRecords(filteredData[category], sortingOptions[category]);
+    const groupedRecords = groupRecordsByPeriod(sortedRecords, groupingOptions[category]);
+    
+    groupedRecords.forEach(group => {
+        // Add week/month header if grouping is enabled
+        if (groupingOptions[category] !== 'none') {
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = `
+                <td colspan="11" class="week-header">
+                    <span>${group.label}</span>
+                    <span class="week-summary">${group.summary}</span>
+                </td>
+            `;
+            tableBody.appendChild(headerRow);
         }
+        
+        // Add records for this group
+        group.records.forEach((row) => {
+            const tr = document.createElement('tr');
 
-        tr.className = colorClass;
+            // Asigna la clase de color a la fila si tiene color
+            let colorClass = '';
+            if (row.color && row.color !== 'none') {
+                colorClass = `row-${row.color}`;
+            }
 
-        tr.innerHTML = `
-            <td>${row.no}</td>
-            <td><input type="text" class="editable" value="${row.tipo}" data-field="tipo" data-id="${row.id}"></td>
-            <td><input type="text" class="editable" value="${row.factura}" data-field="factura" data-id="${row.id}"></td>
-            <td><input type="text" class="editable" value="${row.referencia}" data-field="referencia" data-id="${row.id}"></td>
-            <td><input type="text" class="editable" value="${row.fechaFactura}" data-field="fechaFactura" data-id="${row.id}"></td>
-            <td><input type="text" class="editable" value="${row.fechaVencimiento}" data-field="fechaVencimiento" data-id="${row.id}"></td>
-            <td><input type="text" class="editable" value="${row.moneda}" data-field="moneda" data-id="${row.id}"></td>
-            <td class="money ${parseFloat(row.importe.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
-                <input type="text" class="editable" value="${row.importe}" data-field="importe" data-id="${row.id}">
-            </td>
-            <td class="money">
-                <input type="text" class="editable" value="${row.pago}" data-field="pago" data-id="${row.id}">
-            </td>
-            <td class="money ${parseFloat(row.balance.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
-                <input type="text" class="editable" value="${row.balance}" data-field="balance" data-id="${row.id}">
-            </td>
-            <td>
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1.5px solid #bbb;${row.color && row.color !== 'none' ? `background:${getColorHex(row.color)};` : 'background: repeating-linear-gradient(45deg, #fff 0 4px, #eee 4px 8px);'}"></span>
-                    <button class="modal-button secondary" style="padding:4px 10px;font-size:1rem;" onclick="openEditModal('${row.id}')">✏️</button>
-                </div>
-            </td>
-        `;
-        tableBody.appendChild(tr);
+            tr.className = colorClass;
 
-        tr.ondblclick = function() {
-            openEditModal(row.id);
-        };
+            tr.innerHTML = `
+                <td>${row.no}</td>
+                <td><input type="text" class="editable" value="${row.tipo}" data-field="tipo" data-id="${row.id}"></td>
+                <td><input type="text" class="editable" value="${row.factura}" data-field="factura" data-id="${row.id}"></td>
+                <td><input type="text" class="editable" value="${row.referencia}" data-field="referencia" data-id="${row.id}"></td>
+                <td><input type="text" class="editable" value="${row.fechaFactura}" data-field="fechaFactura" data-id="${row.id}"></td>
+                <td><input type="text" class="editable" value="${row.fechaVencimiento}" data-field="fechaVencimiento" data-id="${row.id}"></td>
+                <td><input type="text" class="editable" value="${row.moneda}" data-field="moneda" data-id="${row.id}"></td>
+                <td class="money ${parseFloat(row.importe.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
+                    <input type="text" class="editable" value="${row.importe}" data-field="importe" data-id="${row.id}">
+                </td>
+                <td class="money">
+                    <input type="text" class="editable" value="${row.pago}" data-field="pago" data-id="${row.id}">
+                </td>
+                <td class="money ${parseFloat(row.balance.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
+                    <input type="text" class="editable" value="${row.balance}" data-field="balance" data-id="${row.id}">
+                </td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1.5px solid #bbb;${row.color && row.color !== 'none' ? `background:${getColorHex(row.color)};` : 'background: repeating-linear-gradient(45deg, #fff 0 4px, #eee 4px 8px);'}"></span>
+                        <button class="modal-button secondary" style="padding:4px 10px;font-size:1rem;" onclick="openEditModal('${row.id}')">✏️</button>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+
+            tr.ondblclick = function() {
+                openEditModal(row.id);
+            };
+        });
     });
 
-    // Agregar event listeners para los campos editables
+    // Add event listeners for editable fields
     document.querySelectorAll('.editable').forEach(input => {
         input.addEventListener('change', function() {
             const id = this.dataset.id;
             const field = this.dataset.field;
             const value = this.value;
             
-            // Encontrar la categoría y el índice del registro
             const [cat, index] = id.split('_');
             const recordIndex = parseInt(index);
             
-            // Actualizar el dato en allData y filteredData
             if (allData[cat] && allData[cat][recordIndex]) {
                 allData[cat][recordIndex][field] = value;
                 filteredData[cat][recordIndex][field] = value;
@@ -413,7 +612,7 @@ function filterData(category) {
     } else {
         filteredData[category] = allData[category].filter(row => 
             Object.values(row).some(value => 
-                value.toString().toLowerCase().includes(searchTerm)
+                value && value.toString().toLowerCase().includes(searchTerm)
             )
         );
     }
@@ -482,6 +681,7 @@ function addNewRecord(category) {
     filteredData[category] = [...allData[category]];
     renderTable(category);
     showStatus(`Nuevo registro agregado a ${category}`, 'success');
+    updateTabCounts();
 }
 
 function openEditModal(recordId) {
@@ -553,6 +753,7 @@ function saveEdit() {
 
     // Actualizar la tabla
     renderTable(category);
+    updateTabCounts();
     closeModal();
 }
 
@@ -579,6 +780,27 @@ function getColorHex(color) {
         default: return '#fff';
     }
 }
+
+function updateTabCounts() {
+    document.getElementById('creditosCount').textContent = allData.creditos.length;
+    document.getElementById('serviciosCount').textContent = allData.servicios.length;
+    document.getElementById('stockCount').textContent = allData.stock.length;
+    document.getElementById('otrosCount').textContent = allData.otros.length;
+}
+
+// Add click outside modal to close
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+
+// Add escape key to close modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('editModal').style.display === 'block') {
+        closeModal();
+    }
+});
 
 // Hacer funciones globales para el HTML
 window.openEditModal = openEditModal;
