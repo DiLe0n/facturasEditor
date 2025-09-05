@@ -241,35 +241,161 @@
 
     <!-- Modal para editar registro -->
     <div id="editModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content-wide">
             <h3>📝 Editar Registro</h3>
-            <div class="form-group">
-                <label>Color del registro:</label>
-                <div class="color-options">
-                    <div class="color-option color-none" data-color="none" title="Sin color"></div>
-                    <div class="color-option color-red" data-color="red" title="Rojo"></div>
-                    <div class="color-option color-yellow" data-color="yellow" title="Amarillo"></div>
-                    <div class="color-option color-green" data-color="green" title="Verde"></div>
-                    <div class="color-option color-blue" data-color="blue" title="Azul"></div>
-                    <div class="color-option color-orange" data-color="orange" title="Naranja"></div>
-                    <div class="color-option color-purple" data-color="purple" title="Morado"></div>
+            
+            <div class="modal-layout">
+                <!-- Panel izquierdo - Formulario -->
+                <div class="modal-form">
+                    <div class="form-group">
+                        <label>Color del registro:</label>
+                        <div class="color-options">
+                            <div class="color-option color-none" data-color="none" title="Sin color"></div>
+                            <div class="color-option color-red" data-color="red" title="Rojo"></div>
+                            <div class="color-option color-yellow" data-color="yellow" title="Amarillo"></div>
+                            <div class="color-option color-green" data-color="green" title="Verde"></div>
+                            <div class="color-option color-blue" data-color="blue" title="Azul"></div>
+                            <div class="color-option color-orange" data-color="orange" title="Naranja"></div>
+                            <div class="color-option color-purple" data-color="purple" title="Morado"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Monto pagado:</label>
+                        <div class="payment-amount-container">
+                            <input type="text" id="editPago" class="payment-amount-input" placeholder="0.00">
+                            <button type="button" class="pay-total-btn" onclick="payTotal()" title="Pagar el total pendiente">
+                                💯 Pagar Total
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>¿Quién realizó el pago?:</label>
+                        <input type="text" id="editQuien" placeholder="Nombre de la persona">
+                    </div>
+                    <div class="form-group">
+                        <label>Pendiente por pagar:</label>
+                        <input type="text" id="editPendiente" placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Estado del pago:</label>
+                        <div class="payment-status-container">
+                            <div class="status-indicator" id="paymentStatusIndicator">
+                                <span class="status-icon">⏳</span>
+                                <span class="status-text" id="paymentStatusText">Pendiente</span>
+                            </div>
+                            <button type="button" class="credit-btn" id="creditButton" onclick="creditRecord()" title="Marcar como acreditado">
+                                ✅ Acreditar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button type="button" class="quick-action-btn partial" onclick="quickPayment(0.5)" title="Pagar 50%">
+                            50%
+                        </button>
+                        <button type="button" class="quick-action-btn partial" onclick="quickPayment(0.75)" title="Pagar 75%">
+                            75%
+                        </button>
+                        <button type="button" class="quick-action-btn full" onclick="quickPayment(1)" title="Pagar 100%">
+                            100%
+                        </button>
+                    </div>
+                    
+                    <div class="modal-buttons">
+                        <button class="modal-button danger" onclick="deleteRecord()" style="background: #dc3545;">🗑️ Eliminar</button>
+                        <button class="modal-button secondary" onclick="closeModal()">Cancelar</button>
+                        <button class="modal-button primary" onclick="saveEdit()">Guardar</button>
+                    </div>
+                </div>
+                
+                <!-- Panel derecho - Historial -->
+                <div class="modal-history">
+                    <div class="history-header">
+                        <h4>📊 Historial de Pagos</h4>
+                        <button id="exportHistoryBtn" class="export-btn" onclick="exportPaymentHistory()" title="Exportar historial">
+                            📄 Exportar
+                        </button>
+                    </div>
+                    <div id="paymentHistory" class="payment-history">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                    <div class="history-summary">
+                        <div class="summary-item">
+                            <span>Total pagado:</span>
+                            <span id="totalPaid" class="amount">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Importe original:</span>
+                            <span id="originalAmount" class="amount">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Pendiente:</span>
+                            <span id="remainingAmount" class="amount">$0.00</span>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar nuevo registro -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <h3>➕ Agregar Nuevo Registro</h3>
+            
             <div class="form-group">
-                <label>Monto pagado:</label>
-                <input type="text" id="editPago" placeholder="0.00">
+                <label>Tipo:</label>
+                <input type="text" id="addTipo" placeholder="CM, FC, NC, etc.">
             </div>
+            
             <div class="form-group">
-                <label>¿Quién realizó el pago?:</label>
-                <input type="text" id="editQuien" placeholder="Nombre de la persona">
+                <label>Nº Factura:</label>
+                <input type="text" id="addFactura" placeholder="ESCN0311063">
             </div>
+            
             <div class="form-group">
-                <label>Pendiente por pagar:</label>
-                <input type="text" id="editPendiente" placeholder="0.00">
+                <label>N° de referencia:</label>
+                <input type="text" id="addReferencia" placeholder="ESIN1003196, RNN0997105, STOCK001234">
             </div>
+            
+            <div class="form-group">
+                <label>Fecha Factura (DD/MM/YYYY):</label>
+                <input type="text" id="addFechaFactura" placeholder="12/05/2025">
+            </div>
+            
+            <div class="form-group">
+                <label>Fecha de vencimiento (DD/MM/YYYY):</label>
+                <input type="text" id="addFechaVencimiento" placeholder="12/05/2025">
+            </div>
+            
+            <div class="form-group">
+                <label>Moneda:</label>
+                <select id="addMoneda" style="width: 100%; padding: 12px; border: 2px solid var(--gris); border-radius: 8px; font-size: 1rem;">
+                    <option value="MXN">MXN</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Importe Factura:</label>
+                <input type="text" id="addImporte" placeholder="-2,034.62">
+            </div>
+            
+            <div class="form-group">
+                <label>Importe de pago:</label>
+                <input type="text" id="addPago" placeholder="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Balance:</label>
+                <input type="text" id="addBalance" placeholder="-2,034.62">
+            </div>
+            
             <div class="modal-buttons">
-                <button class="modal-button secondary" onclick="closeModal()">Cancelar</button>
-                <button class="modal-button primary" onclick="saveEdit()">Guardar</button>
+                <button class="modal-button secondary" onclick="closeAddModal()">❌ Cancelar</button>
+                <button class="modal-button primary" onclick="saveNewRecord()">💾 Guardar Registro</button>
             </div>
         </div>
     </div>
