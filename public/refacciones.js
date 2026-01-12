@@ -38,8 +38,8 @@ const status = document.getElementById('status');
 const fileName = document.getElementById('fileName');
 
 // Configuración de la API
-const API_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:3000' 
+const API_URL = '' 
+    ? '/api/process-excel' 
     : window.location.origin;
 
 console.log('🌐 API URL:', API_URL);
