@@ -1,31 +1,34 @@
 let allData = {
-    creditos: [],
     servicios: [],
-    stock: [],
+    stockcomp: [],
+    stocknum: [],
     otros: []
 };
+
 let filteredData = {
-    creditos: [],
     servicios: [],
-    stock: [],
+    stockcomp: [],
+    stocknum: [],
     otros: []
 };
+
 let groupingOptions = {
-    creditos: 'none',
     servicios: 'none',
-    stock: 'none',
+    stockcomp: 'none',
+    stocknum: 'none',
     otros: 'none'
 };
 
 let sortingOptions = {
-    creditos: 'date-desc',
-    servicios: 'date-desc',
-    stock: 'date-desc',
-    otros: 'date-desc'
+    servicios: 'due-asc',
+    stockcomp: 'due-asc',
+    stocknum: 'due-asc',
+    otros: 'due-asc'
 };
 let currentEditingId = null;
-let currentCategory = 'creditos';
-let currentAddCategory = 'creditos';
+let currentCategory = 'servicios';
+let currentAddCategory = 'servicios';
+let needsPassword = false;
 
 const fileInput = document.getElementById('fileInput');
 const passwordInput = document.getElementById('passwordInput');
@@ -33,6 +36,13 @@ const processButton = document.getElementById('processButton');
 const dataSection = document.getElementById('dataSection');
 const status = document.getElementById('status');
 const fileName = document.getElementById('fileName');
+
+// Configuración de la API
+const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3000' 
+    : window.location.origin;
+
+console.log('🌐 API URL:', API_URL);
 
 // Event listeners para las pestañas
 document.querySelectorAll('.tab').forEach(tab => {
@@ -43,7 +53,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // Event listeners para controles de agrupamiento
-['creditos', 'servicios', 'stock', 'otros'].forEach(category => {
+['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
     const capitalizedCategory = category.charAt(0).toUpperCase() + category.slice(1);
     const groupSelect = document.getElementById(`groupBy${capitalizedCategory}`);
     const sortSelect = document.getElementById(`sortBy${capitalizedCategory}`);
@@ -64,20 +74,21 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // Event listeners para cada categoría
-['creditos', 'servicios', 'stock', 'otros'].forEach(category => {
+['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
     const capitalizedCategory = category.charAt(0).toUpperCase() + category.slice(1);
     const searchInput = document.getElementById(`searchInput${capitalizedCategory}`);
     const saveButton = document.getElementById(`saveButton${capitalizedCategory}`);
     const addButton = document.getElementById(`addButton${capitalizedCategory}`);
     
     if (searchInput) searchInput.addEventListener('input', () => filterData(category));
-    if (saveButton) saveButton.addEventListener('click', () => saveData(category));
     if (addButton) addButton.addEventListener('click', () => addNewRecord(category));
 });
 
 fileInput.addEventListener('change', function(e) {
     if (e.target.files.length > 0) {
-        fileName.textContent = `Archivo seleccionado: ${e.target.files[0].name}`;
+        const file = e.target.files[0];
+        const fileSize = (file.size / 1024 / 1024).toFixed(2);
+        fileName.textContent = `📄 ${file.name} (${fileSize} MB)`;
         processButton.disabled = false;
     }
 });
@@ -101,61 +112,119 @@ function switchTab(category) {
 
 function categorizeRecord(referencia) {
     if (!referencia) return 'otros';
-    const ref = referencia.toUpperCase();
-    if (ref.startsWith('ESIN')) return 'creditos';
+    const ref = referencia.toUpperCase().trim();
+    
+    // Servicios: RNN
     if (ref.startsWith('RNN')) return 'servicios';
-    if (ref.startsWith('STOCK')) return 'stock';
+    
+    // StockComp: STOCKCOMP
+    if (ref.startsWith('STOCKCOMP')) return 'stockcomp';
+    
+    // Stock con número: STOCK seguido de números (STOCK1, STOCK2, etc)
+    if (/^STOCK\d+/.test(ref)) return 'stocknum';
+    
+    // Todo lo demás (incluyendo ESIN que antes era créditos)
     return 'otros';
 }
 
 async function processFile() {
     const file = fileInput.files[0];
-    const password = passwordInput.value;
+    const password = passwordInput.value.trim();
 
     if (!file) {
         showStatus('Por favor selecciona un archivo', 'error');
         return;
     }
 
-    showStatus('Procesando archivo...', 'loading');
+    const fileName = file.name.toLowerCase();
+    const fileExtension = fileName.split('.').pop();
+
+    showStatus('📤 Enviando archivo al servidor...', 'loading');
     processButton.disabled = true;
 
     try {
-        const reader = new FileReader();
-        reader.onload = async function(e) {
+        let jsonData;
+
+        if (fileExtension === 'csv') {
+            // Procesar CSV localmente (no necesita servidor)
+            const text = await file.text();
+            const parsed = Papa.parse(text, {
+                skipEmptyLines: true,
+                encoding: 'UTF-8'
+            });
+            jsonData = parsed.data;
+            showStatus('✅ CSV procesado localmente', 'success');
+            
+        } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+            // Enviar al servidor para procesamiento
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('password', password);
+
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { 
-                    type: 'array',
-                    cellText: false,
-                    cellDates: false,
-                    raw: true,
-                    dateNF: 'DD/MM/YYYY'
-                });                
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { 
-                    header: 1,
-                    raw: false,
-                    dateNF: 'DD/MM/YYYY'
+                const response = await fetch(`${API_URL}/api/process-excel`, {
+                    method: 'POST',
+                    body: formData
                 });
-                
-                const success = await processNewRecords(jsonData);
-                if (!success) {
-                    processButton.disabled = false;
-                    return;
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    if (result.needsPassword) {
+                        showStatus('🔒 Contraseña incorrecta. Por favor verifica e intenta nuevamente.', 'error');
+                        processButton.disabled = false;
+                        passwordInput.focus();
+                        passwordInput.select();
+                        return;
+                    }
+                    
+                    if (result.needsAlternative) {
+                        // Mostrar métodos alternativos
+                        showAlternativeMethods(result.alternatives);
+                        processButton.disabled = false;
+                        return;
+                    }
+
+                    throw new Error(result.error || 'Error procesando el archivo');
                 }
-            } catch (err) {
-                showStatus('Error procesando el archivo: ' + err.message, 'error');
+
+                jsonData = result.data;
+                
+                const infoMsg = result.info.hasPassword 
+                    ? `✅ Archivo desencriptado: ${result.info.rows} filas, ${result.info.cols} columnas`
+                    : `✅ Archivo procesado: ${result.info.rows} filas, ${result.info.cols} columnas`;
+                
+                showStatus(infoMsg, 'success');
+                
+            } catch (fetchError) {
+                if (fetchError.message.includes('Failed to fetch')) {
+                    showStatus('❌ No se puede conectar al servidor. Verifica que esté ejecutándose.', 'error');
+                } else {
+                    showStatus('❌ ' + fetchError.message, 'error');
+                }
                 processButton.disabled = false;
+                return;
             }
-        };
-        reader.onerror = function() {
-            showStatus('Error leyendo el archivo', 'error');
+            
+        } else {
+            throw new Error('Formato no soportado. Use .xlsx, .xls o .csv');
+        }
+
+        // Procesar los datos
+        const success = await processNewRecords(jsonData);
+        if (!success) {
             processButton.disabled = false;
-        };
-        reader.readAsArrayBuffer(file);
+            return;
+        }
+
+        // Limpiar contraseña si fue exitoso
+        if (password) {
+            passwordInput.value = '';
+        }
+
     } catch (error) {
-        showStatus('Error procesando el archivo: ' + error.message, 'error');
+        console.error('Error:', error);
+        showStatus('❌ Error: ' + error.message, 'error');
         processButton.disabled = false;
     }
 }
@@ -212,6 +281,8 @@ function formatDate(dateStr) {
 }
 
 async function processNewRecords(jsonData) {
+    const fileId = `file_${Date.now()}`;
+    const fileName = fileInput.files[0]?.name || 'archivo_desconocido.xlsx';
     // Procesar los datos del archivo
     const dataRows = jsonData.length > 1 ? jsonData.slice(1) : jsonData;
     const newRecordsFromFile = dataRows.map((row, index) => ({
@@ -228,7 +299,10 @@ async function processNewRecords(jsonData) {
         balance: (row[9] || '0').toString(),
         color: 'none',
         quien: '',
-        pendiente: (row[9] || '0').toString()
+        pendiente: (row[9] || '0').toString(),
+        sourceFile: fileName,
+        sourceFileId: fileId,
+        importDate: new Date().toISOString()
     }));
 
     // Verificar si ya hay datos existentes
@@ -269,18 +343,17 @@ async function processNewRecords(jsonData) {
             newCounts[cat] = newRecords.filter(r => categorizeRecord(r.referencia) === cat).length;
         });
 
-        showStatus(`✅ ${newRecords.length} registros nuevos agregados exitosamente: Créditos(+${newCounts.creditos}), Servicios(+${newCounts.servicios}), Stock(+${newCounts.stock}), Otros(+${newCounts.otros})`, 'success');
+        showStatus(`✅ ${newRecords.length} registros nuevos agregados exitosamente: Servicios(+${newCounts.servicios}), StockComp(+${newCounts.stockcomp}), Stock#(+${newCounts.stocknum}), Otros(+${newCounts.otros})`, 'success');
         updateTabCounts();
         renderTable(currentCategory);
 
     } else {
-        // CASO: Primera vez, no hay datos existentes - PROCESAR NORMALMENTE
 
         // Limpiar datos existentes
         allData = {
-            creditos: [],
             servicios: [],
-            stock: [],
+            stockcomp: [],
+            stocknum: [],
             otros: []
         };
 
@@ -302,71 +375,136 @@ async function processNewRecords(jsonData) {
         filteredData = JSON.parse(JSON.stringify(allData));
 
         const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
-        showStatus(`📊 Archivo procesado exitosamente. ${totalRecords} registros categorizados: Créditos(${allData.creditos.length}), Servicios(${allData.servicios.length}), Stock(${allData.stock.length}), Otros(${allData.otros.length})`, 'success');
+        showStatus(`📊 Archivo procesado exitosamente. ${totalRecords} registros categorizados: Servicios(${allData.servicios.length}), StockComp(${allData.stockcomp.length}), Stock#(${allData.stocknum.length}), Otros(${allData.otros.length})`, 'success');
         updateTabCounts();
         renderTable(currentCategory);
     }
 
     dataSection.style.display = 'block';
-    switchTab('creditos');
+    autoCheckACCRecords();
+    switchTab('servicios');
     return true;
+}
+
+// Función para verificar y auto-acreditar registros tipo ACC
+function autoCheckACCRecords() {
+    ['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
+        allData[category].forEach(record => {
+            if (record.tipo && record.tipo.toUpperCase() === 'ACC' && !record.credited) {
+                record.credited = true;
+                record.creditDate = new Date().toLocaleDateString('es-ES');
+                record.creditReason = 'paid';
+                record.creditNotes = 'Auto-acreditado por tipo ACC';
+                record.creditedBy = 'Sistema';
+            }
+        });
+    });
+    
+    filteredData = JSON.parse(JSON.stringify(allData));
+}
+
+// AGREGAR esta nueva función en refacciones.js:
+
+function showAlternativeMethods(alternatives) {
+    const statusDiv = document.getElementById('status');
+    
+    statusDiv.innerHTML = `
+        <div style="background: linear-gradient(135deg, #fff3cd 0%, #fff9db 100%); padding: 25px; border-radius: 15px; border-left: 5px solid #ffc107; margin-top: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <span style="font-size: 2.5rem;">🔐</span>
+                <h3 style="margin: 0; color: #856404;">Tipo de Encriptación No Soportado</h3>
+            </div>
+            
+            <p style="color: #856404; margin: 10px 0; font-size: 1rem; line-height: 1.6;">
+                <strong>Este archivo Excel usa un método de encriptación antiguo o propietario que no se puede desencriptar automáticamente.</strong>
+            </p>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="color: #392677; display: block; margin-bottom: 15px; font-size: 1.1rem;">🛠️ Métodos Alternativos:</strong>
+                
+                ${alternatives.map((alt, i) => `
+                    <div style="margin: 15px 0; padding: 15px; background: ${i === 0 ? '#e8f5e9' : i === 1 ? '#e3f2fd' : '#f3e5f5'}; border-radius: 8px; border-left: 4px solid ${i === 0 ? '#4caf50' : i === 1 ? '#2196f3' : '#9c27b0'};">
+                        <strong style="color: ${i === 0 ? '#2e7d32' : i === 1 ? '#1565c0' : '#6a1b9a'};">Método ${i + 1}:</strong>
+                        <p style="margin: 8px 0 0 0; color: #333; line-height: 1.6;">${alt}</p>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                <strong style="color: #1976d2;">💡 Recomendación:</strong>
+                <p style="margin: 8px 0; color: #1565c0; line-height: 1.6;">
+                    El método más rápido es abrir el archivo en Excel, ir a <strong>Archivo → Información → Proteger libro → Cifrar con contraseña</strong>, 
+                    eliminar la contraseña (dejar vacío), y guardar. Luego vuelve a cargarlo aquí.
+                </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="location.reload()" style="padding: 12px 30px; background: var(--azul); color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600;">
+                    🔄 Intentar con otro archivo
+                </button>
+            </div>
+        </div>
+    `;
+    
+    statusDiv.className = 'status';
+    statusDiv.style.display = 'block';
 }
 
 function showManualEntry() {
     // Crear datos de ejemplo categorizados
     allData = {
-        creditos: [
-            {
-                id: 'creditos_0',
-                no: '1',
-                tipo: 'CM',
-                factura: 'ESCN0311063',
-                referencia: 'ESIN1003196',
-                fechaFactura: '12/05/2025',
-                fechaVencimiento: '12/05/2025',
-                moneda: 'MXN',
-                importe: '-2,034.62',
-                pago: '0',
-                balance: '-2,034.62',
-                color: 'none',
-                quien: '',
-                pendiente: '-2,034.62'
-            }
-        ],
         servicios: [
             {
                 id: 'servicios_0',
-                no: '2',
+                no: '1',
                 tipo: 'CM',
                 factura: 'ESCN0311068',
                 referencia: 'RNN0997105',
                 fechaFactura: '13/05/2025',
                 fechaVencimiento: '13/05/2025',
                 moneda: 'MXN',
-                importe: '-3,600.85',
+                importe: '3,600.85',
                 pago: '0',
-                balance: '-3,600.85',
+                balance: '3,600.85',
                 color: 'none',
                 quien: '',
-                pendiente: '-3,600.85'
+                pendiente: '3,600.85'
             }
         ],
-        stock: [
+        stockcomp: [
             {
-                id: 'stock_0',
-                no: '3',
+                id: 'stockcomp_0',
+                no: '2',
                 tipo: 'CM',
                 factura: 'ESCN0311069',
-                referencia: 'STOCK001234',
+                referencia: 'STOCKCOMP001234',
                 fechaFactura: '13/05/2025',
                 fechaVencimiento: '13/05/2025',
                 moneda: 'MXN',
-                importe: '-1,500.00',
+                importe: '1,500.00',
                 pago: '0',
-                balance: '-1,500.00',
+                balance: '1,500.00',
                 color: 'none',
                 quien: '',
-                pendiente: '-1,500.00'
+                pendiente: '1,500.00'
+            }
+        ],
+        stocknum: [
+            {
+                id: 'stocknum_0',
+                no: '3',
+                tipo: 'CM',
+                factura: 'ESCN0311070',
+                referencia: 'STOCK123',
+                fechaFactura: '13/05/2025',
+                fechaVencimiento: '13/05/2025',
+                moneda: 'MXN',
+                importe: '2,200.00',
+                pago: '0',
+                balance: '2,200.00',
+                color: 'none',
+                quien: '',
+                pendiente: '2,200.00'
             }
         ],
         otros: [
@@ -374,23 +512,23 @@ function showManualEntry() {
                 id: 'otros_0',
                 no: '4',
                 tipo: 'CM',
-                factura: 'ESCN0311070',
-                referencia: 'OTROS123456',
+                factura: 'ESCN0311071',
+                referencia: 'ESIN1003196',
                 fechaFactura: '13/05/2025',
                 fechaVencimiento: '13/05/2025',
                 moneda: 'MXN',
-                importe: '-2,200.00',
+                importe: '2,034.62',
                 pago: '0',
-                balance: '-2,200.00',
+                balance: '2,034.62',
                 color: 'none',
                 quien: '',
-                pendiente: '-2,200.00'
+                pendiente: '2,034.62'
             }
         ]
     };
 
     filteredData = JSON.parse(JSON.stringify(allData));
-    switchTab('creditos');
+    switchTab('servicios');
     dataSection.style.display = 'block';
     showStatus('Datos de ejemplo cargados y categorizados. Puedes editarlos y agregar más registros.', 'success');
     updateTabCounts();
@@ -490,6 +628,10 @@ function sortRecords(records, sortBy) {
                 return parseDate(a.fechaFactura) - parseDate(b.fechaFactura);
             case 'date-desc':
                 return parseDate(b.fechaFactura) - parseDate(a.fechaFactura);
+            case 'due-asc':
+                return parseDate(a.fechaVencimiento) - parseDate(b.fechaVencimiento);
+            case 'due-desc':
+                return parseDate(b.fechaVencimiento) - parseDate(a.fechaVencimiento);
             case 'amount-asc':
                 return parseFloat(a.importe.replace(/,/g, '')) - parseFloat(b.importe.replace(/,/g, ''));
             case 'amount-desc':
@@ -550,26 +692,25 @@ function groupRecordsByPeriod(records, groupBy) {
         }));
 }
 
-// Función para resetear agrupaciones y ordenamientos al cargar página
 function resetOptionsToDefault() {
     // Resetear agrupaciones
     groupingOptions = {
-        creditos: 'none',
         servicios: 'none',
-        stock: 'none',
+        stockcomp: 'none',
+        stocknum: 'none',
         otros: 'none'
     };
     
-    // Resetear ordenamientos a fecha descendente (primera opción)
+    // Resetear ordenamientos a fecha de vencimiento ascendente (más próxima primero)
     sortingOptions = {
-        creditos: 'date-desc',
-        servicios: 'date-desc',
-        stock: 'date-desc',
-        otros: 'date-desc'
+        servicios: 'due-asc',
+        stockcomp: 'due-asc',
+        stocknum: 'due-asc',
+        otros: 'due-asc'
     };
     
     // Actualizar los selectores en la interfaz
-    ['creditos', 'servicios', 'stock', 'otros'].forEach(category => {
+    ['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
         const capitalizedCategory = category.charAt(0).toUpperCase() + category.slice(1);
         
         // Actualizar selector de agrupación
@@ -581,23 +722,120 @@ function resetOptionsToDefault() {
         // Actualizar selector de ordenamiento
         const sortSelect = document.getElementById(`sortBy${capitalizedCategory}`);
         if (sortSelect) {
-            sortSelect.value = 'date-desc';
+            sortSelect.value = 'due-asc';
         }
     });
 }
 
 function renderTable(category = currentCategory) {
-    const tableBody = document.getElementById(`tableBody${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const activeTableBody = document.getElementById(`tableBody${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const creditedTableBody = document.getElementById(`creditedTableBody${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const overdueTableBody = document.getElementById(`overdueTableBody${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const warningTableBody = document.getElementById(`warningTableBody${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    
+    const creditedContainer = document.getElementById(`creditedTableContainer${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const overdueContainer = document.getElementById(`overdueTableContainer${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    const warningContainer = document.getElementById(`warningTableContainer${category.charAt(0).toUpperCase() + category.slice(1)}`);
+    
     const recordCount = document.getElementById(`recordCount${category.charAt(0).toUpperCase() + category.slice(1)}`);
     
-    if (!tableBody) return;
+    if (!activeTableBody) return;
 
-    tableBody.innerHTML = '';
+    // Limpiar todas las tablas
+    activeTableBody.innerHTML = '';
+    if (creditedTableBody) creditedTableBody.innerHTML = '';
+    if (overdueTableBody) overdueTableBody.innerHTML = '';
+    if (warningTableBody) warningTableBody.innerHTML = '';
     
-    const sortedRecords = sortRecords(filteredData[category], sortingOptions[category]);
-    const groupedRecords = groupRecordsByPeriod(sortedRecords, groupingOptions[category]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    groupedRecords.forEach(group => {
+    // ✅ Calcular fecha límite para advertencia (7 días desde hoy)
+    const warningDate = new Date(today);
+    warningDate.setDate(warningDate.getDate() + 7);
+    
+    // ✅ SEPARAR registros en 4 grupos
+    const overdueRecords = filteredData[category].filter(r => {
+        if (r.credited) return false;
+        const vencimiento = parseDate(r.fechaVencimiento);
+        return vencimiento < today;
+    });
+    
+    const warningRecords = filteredData[category].filter(r => {
+        if (r.credited) return false;
+        const vencimiento = parseDate(r.fechaVencimiento);
+        return vencimiento >= today && vencimiento <= warningDate;
+    });
+    
+    const activeRecords = filteredData[category].filter(r => {
+        if (r.credited) return false;
+        const vencimiento = parseDate(r.fechaVencimiento);
+        return vencimiento > warningDate;
+    });
+    
+    const creditedRecords = filteredData[category].filter(r => r.credited);
+    
+    // ============ RENDERIZAR FACTURAS VENCIDAS ============
+    if (overdueRecords.length > 0) {
+        const sortedOverdue = sortRecords(overdueRecords, sortingOptions[category]);
+        const groupedOverdue = groupRecordsByPeriod(sortedOverdue, groupingOptions[category]);
+        
+        groupedOverdue.forEach(group => {
+            if (groupingOptions[category] !== 'none') {
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = `
+                    <td colspan="11" class="week-header" style="background: #dc3545;">
+                        <span>${group.label}</span>
+                        <span class="week-summary">${group.summary}</span>
+                    </td>
+                `;
+                overdueTableBody.appendChild(headerRow);
+            }
+            
+            group.records.forEach((row) => {
+                const tr = createRecordRow(row, category);
+                overdueTableBody.appendChild(tr);
+            });
+        });
+        
+        overdueContainer.style.display = 'block';
+    } else {
+        overdueContainer.style.display = 'none';
+    }
+    
+    // ============ RENDERIZAR FACTURAS CON ADVERTENCIA (PRÓXIMAS A VENCER) ============
+    if (warningRecords.length > 0) {
+        const sortedWarning = sortRecords(warningRecords, sortingOptions[category]);
+        const groupedWarning = groupRecordsByPeriod(sortedWarning, groupingOptions[category]);
+        
+        groupedWarning.forEach(group => {
+            if (groupingOptions[category] !== 'none') {
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = `
+                    <td colspan="11" class="week-header" style="background: #ffc107;">
+                        <span>${group.label}</span>
+                        <span class="week-summary">${group.summary}</span>
+                    </td>
+                `;
+                warningTableBody.appendChild(headerRow);
+            }
+            
+            group.records.forEach((row) => {
+                const tr = createRecordRow(row, category);
+                warningTableBody.appendChild(tr);
+            });
+        });
+        
+        warningContainer.style.display = 'block';
+    } else {
+        warningContainer.style.display = 'none';
+    }
+    
+    // ============ RENDERIZAR REGISTROS ACTIVOS ============
+    const sortedActive = sortRecords(activeRecords, sortingOptions[category]);
+    const groupedActive = groupRecordsByPeriod(sortedActive, groupingOptions[category]);
+    
+    groupedActive.forEach(group => {
         if (groupingOptions[category] !== 'none') {
             const headerRow = document.createElement('tr');
             headerRow.innerHTML = `
@@ -606,74 +844,223 @@ function renderTable(category = currentCategory) {
                     <span class="week-summary">${group.summary}</span>
                 </td>
             `;
-            tableBody.appendChild(headerRow);
+            activeTableBody.appendChild(headerRow);
         }
         
         group.records.forEach((row) => {
-            const tr = document.createElement('tr');
-
-            let colorClass = '';
-            if (row.color && row.color !== 'none') {
-                colorClass = `row-${row.color}`;
-            }
-
-            if (row.credited) {
-                colorClass += ' row-credited';
-            }
-
-            tr.className = colorClass;
-
-            tr.innerHTML = `
-                <td>${row.no}</td>
-                <td><input type="text" class="editable" value="${row.tipo}" data-field="tipo" data-id="${row.id}"></td>
-                <td><input type="text" class="editable" value="${row.factura}" data-field="factura" data-id="${row.id}"></td>
-                <td><input type="text" class="editable" value="${row.referencia}" data-field="referencia" data-id="${row.id}"></td>
-                <td><input type="text" class="editable" value="${row.fechaFactura}" data-field="fechaFactura" data-id="${row.id}"></td>
-                <td><input type="text" class="editable" value="${row.fechaVencimiento}" data-field="fechaVencimiento" data-id="${row.id}"></td>
-                <td><input type="text" class="editable" value="${row.moneda}" data-field="moneda" data-id="${row.id}"></td>
-                <td class="money ${parseFloat(row.importe.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
-                    <input type="text" class="editable" value="${row.importe}" data-field="importe" data-id="${row.id}">
-                </td>
-                <td class="money">
-                    <input type="text" class="editable" value="${row.pago}" data-field="pago" data-id="${row.id}">
-                </td>
-                <td class="money ${parseFloat(row.balance.replace(/,/g, '')) < 0 ? 'negative' : 'positive'}">
-                    <input type="text" class="editable" value="${row.balance}" data-field="balance" data-id="${row.id}">
-                </td>
-                <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1.5px solid #bbb;${row.color && row.color !== 'none' ? `background:${getColorHex(row.color)};` : 'background: repeating-linear-gradient(45deg, #fff 0 4px, #eee 4px 8px);'}"></span>
-                        <button class="modal-button secondary" style="padding:4px 10px;font-size:1rem;" onclick="openEditModal('${row.id}')">✏️</button>
-                    </div>
-                </td>
-            `;
-            tableBody.appendChild(tr);
-
-            tr.ondblclick = function() {
-                openEditModal(row.id);
-            };
+            const tr = createRecordRow(row, category);
+            activeTableBody.appendChild(tr);
         });
     });
-
-    document.querySelectorAll('.editable').forEach(input => {
-        input.addEventListener('change', function() {
-            const id = this.dataset.id;
-            const field = this.dataset.field;
-            const value = this.value;
-            
-            const [cat, index] = id.split('_');
-            const recordIndex = parseInt(index);
-            
-            if (allData[cat] && allData[cat][recordIndex]) {
-                allData[cat][recordIndex][field] = value;
-                filteredData[cat][recordIndex][field] = value;
-            }
+    
+    // ============ RENDERIZAR REGISTROS ACREDITADOS ============
+    if (creditedRecords.length > 0) {
+        const sortedCredited = creditedRecords.sort((a, b) => {
+            const dateA = parseDate(a.creditDate || '01/01/2000');
+            const dateB = parseDate(b.creditDate || '01/01/2000');
+            return dateB - dateA;
         });
-    });
-
-    if (recordCount) {
-        recordCount.textContent = `${filteredData[category].length} registros`;
+        
+        sortedCredited.forEach((row) => {
+            const tr = createRecordRow(row, category);
+            creditedTableBody.appendChild(tr);
+        });
+        
+        creditedContainer.style.display = 'block';
+    } else {
+        creditedContainer.style.display = 'none';
     }
+
+    // ============ ACTUALIZAR CONTADORES ============
+    if (recordCount) {
+        const totalCount = filteredData[category].length;
+        const overdueCount = overdueRecords.length;
+        const warningCount = warningRecords.length;
+        const activeCount = activeRecords.length;
+        const creditedCount = creditedRecords.length;
+        
+        let countsHTML = `<span style="color: var(--azul); font-weight: 600;">${totalCount} registros totales</span>`;
+        
+        const parts = [];
+        if (overdueCount > 0) parts.push(`<span style="color: #dc3545;">🔴 Vencidos: ${overdueCount}</span>`);
+        if (warningCount > 0) parts.push(`<span style="color: #ffc107;">⚠️ Próximos: ${warningCount}</span>`);
+        if (activeCount > 0) parts.push(`📋 Activos: ${activeCount}`);
+        if (creditedCount > 0) parts.push(`✅ Acreditados: ${creditedCount}`);
+        
+        if (parts.length > 0) {
+            countsHTML += `<span style="margin-left: 15px; color: #666;">${parts.join(' | ')}</span>`;
+        }
+        
+        recordCount.innerHTML = countsHTML;
+    }
+
+    setupEditableFields();
+}
+
+// ✅ FUNCIÓN AUXILIAR para crear filas (SIN cambios, pero corregida la palomita)
+function createRecordRow(row, category) {
+    const tr = document.createElement('tr');
+
+    let colorClass = '';
+    if (row.color && row.color !== 'none') {
+        colorClass = `row-${row.color}`;
+    }
+
+    tr.className = colorClass;
+
+    tr.innerHTML = `
+        <td>${row.no}</td>
+        <td><input type="text" class="editable" value="${row.tipo}" data-field="tipo" data-id="${row.id}"></td>
+        <td><input type="text" class="editable" value="${row.factura}" data-field="factura" data-id="${row.id}"></td>
+        <td><input type="text" class="editable" value="${row.referencia}" data-field="referencia" data-id="${row.id}"></td>
+        <td><input type="text" class="editable" value="${row.fechaFactura}" data-field="fechaFactura" data-id="${row.id}"></td>
+        <td><input type="text" class="editable" value="${row.fechaVencimiento}" data-field="fechaVencimiento" data-id="${row.id}"></td>
+        <td><input type="text" class="editable" value="${row.moneda}" data-field="moneda" data-id="${row.id}"></td>
+        <td class="money ${parseFloat(row.importe.replace(/,/g, '')) > 0 ? 'negative' : 'positive'}">
+            <input type="text" class="editable" value="${row.importe}" data-field="importe" data-id="${row.id}">
+        </td>
+        <td class="money">
+            <input type="text" class="editable" value="${row.pago}" data-field="pago" data-id="${row.id}">
+        </td>
+        <td class="money ${parseFloat(row.balance.replace(/,/g, '')) > 0 ? 'negative' : 'positive'}">
+            <input type="text" class="editable" value="${row.balance}" data-field="balance" data-id="${row.id}">
+        </td>
+        <td style="min-width: 120px;">
+            <div style="display:flex;align-items:center;gap:6px;justify-content:flex-start;">
+                <span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1.5px solid #bbb;flex-shrink:0;${row.color && row.color !== 'none' ? `background:${getColorHex(row.color)};` : 'background: repeating-linear-gradient(45deg, #fff 0 4px, #eee 4px 8px);'}"></span>
+                ${row.credited ? '<span style="font-size:1.1rem;line-height:1;flex-shrink:0;" title="Registro acreditado">✅</span>' : ''}
+                <button class="modal-button secondary" style="padding:4px 10px;font-size:1rem;" onclick="openEditModal('${row.id}')">✏️</button>
+            </div>
+        </td>
+    `;
+    
+    tr.ondblclick = function() {
+        openEditModal(row.id);
+    };
+    
+    return tr;
+}
+
+// Función para manejar la edición en línea de campos
+function setupEditableFields() {
+    document.querySelectorAll('.editable').forEach(input => {
+        input.addEventListener('blur', function() {
+            const recordId = this.dataset.id;
+            const field = this.dataset.field;
+            let newValue = this.value.trim();
+            
+            if (!recordId || !field) return;
+            
+            const [category, index] = recordId.split('_');
+            const record = allData[category][parseInt(index)];
+            
+            if (!record) return;
+            
+            // Guardar el valor anterior para comparación
+            const oldValue = record[field];
+            
+            // ✅ Validaciones específicas por campo
+            if (field === 'fechaFactura' || field === 'fechaVencimiento') {
+                // Validar formato de fecha DD/MM/YYYY
+                const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+                if (newValue && !dateRegex.test(newValue)) {
+                    showStatus('❌ Formato de fecha inválido (DD/MM/YYYY)', 'error');
+                    this.value = oldValue; // Restaurar valor anterior
+                    this.style.borderColor = '#e74c3c';
+                    setTimeout(() => {
+                        this.style.borderColor = '';
+                    }, 2000);
+                    return;
+                }
+            }
+            
+            // Actualizar el valor
+            record[field] = newValue;
+            
+            // Si se cambió el tipo a ACC, auto-acreditar
+            if (field === 'tipo' && newValue.toUpperCase() === 'ACC' && !record.credited) {
+                record.credited = true;
+                record.creditDate = new Date().toLocaleDateString('es-ES');
+                record.creditReason = 'paid';
+                record.creditNotes = 'Auto-acreditado por tipo ACC';
+                record.creditedBy = 'Sistema';
+                
+                showStatus('✅ Tipo cambiado a ACC - Registro auto-acreditado', 'success');
+                renderTable(category);
+                updateTabCounts();
+                return;
+            }
+            
+            // Sincronizar con filteredData
+            filteredData[category][parseInt(index)] = {...record};
+
+            if ((field === 'fechaFactura' || field === 'fechaVencimiento') && oldValue !== newValue) {
+                renderTable(category);
+                updateTabCounts();
+                
+                // Mostrar confirmación
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #4caf50; color: white; padding: 10px 20px; border-radius: 5px; z-index: 10000; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+                toast.textContent = '✓ Fecha actualizada - Registro reclasificado';
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s';
+                    setTimeout(() => toast.remove(), 300);
+                }, 1500);
+                
+                return; // Salir para evitar el toast duplicado
+            }
+            
+            // Mostrar confirmación visual si el valor cambió
+            if (oldValue !== newValue) {
+                this.style.background = '#e8f5e9';
+                this.style.borderColor = '#4caf50';
+                
+                setTimeout(() => {
+                    this.style.background = '';
+                    this.style.borderColor = '';
+                }, 800);
+                
+                // Mostrar toast pequeño
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #4caf50; color: white; padding: 10px 20px; border-radius: 5px; z-index: 10000; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+                toast.textContent = '✓ Cambio guardado';
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s';
+                    setTimeout(() => toast.remove(), 300);
+                }, 1500);
+            }
+        });
+        
+        // Permitir Enter para guardar
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur();
+            }
+            
+            // ESC para cancelar
+            if (e.key === 'Escape') {
+                const recordId = this.dataset.id;
+                const field = this.dataset.field;
+                const [category, index] = recordId.split('_');
+                const record = allData[category][parseInt(index)];
+                this.value = record[field]; // Restaurar valor original
+                this.blur();
+            }
+        });
+        
+        // Visual feedback al enfocar
+        input.addEventListener('focus', function() {
+            this.style.background = '#fffef7';
+            this.style.borderColor = '#ffc107';
+        });
+    });
 }
 
 function filterData(category) {
@@ -745,17 +1132,17 @@ function addNewRecord(category) {
     const referenciaInput = document.getElementById('addReferencia');
     let placeholderRef = '';
     switch(category) {
-        case 'creditos':
-            placeholderRef = 'ESIN1003196';
-            break;
         case 'servicios':
             placeholderRef = 'RNN0997105';
             break;
-        case 'stock':
-            placeholderRef = 'STOCK001234';
+        case 'stockcomp':
+            placeholderRef = 'STOCKCOMP001234';
+            break;
+        case 'stocknum':
+            placeholderRef = 'STOCK123';
             break;
         case 'otros':
-            placeholderRef = 'OTROS123456';
+            placeholderRef = 'OTRO123456';
             break;
     }
     referenciaInput.placeholder = placeholderRef;
@@ -763,7 +1150,7 @@ function addNewRecord(category) {
     // Obtener fecha actual en formato DD/MM/YYYY
     const today = new Date();
     const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0'); // Los meses van de 0-11
+    const month = String(today.getMonth() + 1).padStart(2, '0');
     const year = today.getFullYear();
     const todayFormatted = `${day}/${month}/${year}`;
 
@@ -785,9 +1172,9 @@ function openEditModal(recordId) {
     
     if (!record) return;
 
-    document.getElementById('editPago').value = record.pago || '0';
-    document.getElementById('editQuien').value = record.quien || '';
-    document.getElementById('editPendiente').value = record.pendiente || record.balance || '0';
+    document.getElementById('editPago').value = '';
+    document.getElementById('editPago').placeholder = '0.00';
+    document.getElementById('editQuien').value = '';
 
     document.querySelectorAll('.color-option').forEach(option => {
         option.classList.remove('selected');
@@ -831,19 +1218,10 @@ function loadPaymentHistory(record) {
     const remaining = Math.abs(originalAmount) - totalPaid;
     remainingAmountSpan.textContent = `$${remaining.toLocaleString()}`;
 
-    // Actualizar el campo pendiente automáticamente
-    const pendienteInput = document.getElementById('editPendiente');
-    if (pendienteInput) {
-        pendienteInput.value = Math.max(0, remaining).toLocaleString();
-    }
-
-    // Actualizar el campo pago total
     const pagoInput = document.getElementById('editPago');
-    if (pagoInput && totalPaid > 0) {
-        // No sobrescribir si el usuario está escribiendo un nuevo pago
-        if (!pagoInput.value || pagoInput.value === '0') {
-            // Solo mostrar el total si no hay un nuevo pago siendo ingresado
-        }
+    if (pagoInput) {
+        pagoInput.value = '';
+        pagoInput.placeholder = '0.00';
     }
     
     if (record.paymentHistory.length === 0) {
@@ -893,9 +1271,55 @@ function saveEdit() {
     if (!record) return;
 
     const selectedColor = document.querySelector('.color-option.selected');
-    const pago = document.getElementById('editPago').value;
-    const quien = document.getElementById('editQuien').value;
-    const pendiente = document.getElementById('editPendiente').value;
+    const pagoInput = document.getElementById('editPago');
+    const quienInput = document.getElementById('editQuien');
+    const pago = pagoInput.value.trim();
+    const quien = quienInput.value.trim();
+
+    // ✅ VALIDACIONES: Si hay monto, debe haber nombre (y viceversa)
+    const pagoAmount = parseFloat(pago.replace(/,/g, '')) || 0;
+    const hasAmount = pagoAmount > 0;
+    const hasName = quien.length > 0;
+
+    // Limpiar estilos previos
+    pagoInput.style.borderColor = '';
+    pagoInput.style.background = '';
+    quienInput.style.borderColor = '';
+    quienInput.style.background = '';
+
+    // Validar que si hay monto, debe haber nombre
+    if (hasAmount && !hasName) {
+        quienInput.style.borderColor = '#e74c3c';
+        quienInput.style.background = '#ffebee';
+        quienInput.focus();
+        
+        showStatus('❌ Falta especificar quién realizó el pago', 'error');
+        
+        // Animación de shake
+        quienInput.style.animation = 'shake 0.5s';
+        setTimeout(() => {
+            quienInput.style.animation = '';
+        }, 500);
+        
+        return; // ❌ No permitir guardar
+    }
+
+    // Validar que si hay nombre, debe haber monto
+    if (hasName && !hasAmount) {
+        pagoInput.style.borderColor = '#e74c3c';
+        pagoInput.style.background = '#ffebee';
+        pagoInput.focus();
+        
+        showStatus('❌ Falta especificar el monto del pago', 'error');
+        
+        // Animación de shake
+        pagoInput.style.animation = 'shake 0.5s';
+        setTimeout(() => {
+            pagoInput.style.animation = '';
+        }, 500);
+        
+        return; // ❌ No permitir guardar
+    }
 
     // Validar y procesar nuevo pago
     if (pago && parseFloat(pago.replace(/,/g, '')) > 0 && quien) {
@@ -904,7 +1328,8 @@ function saveEdit() {
         }
         
         const newPaymentAmount = parseFloat(pago.replace(/,/g, ''));
-        const originalAmount = Math.abs(parseFloat(record.importe.replace(/,/g, '')) || 0);
+        const importeOriginal = parseFloat(record.importe.replace(/,/g, '')) || 0;
+        const originalAmount = Math.abs(importeOriginal);
         
         // Calcular total ya pagado
         const totalPaid = record.paymentHistory.reduce((sum, payment) => {
@@ -918,16 +1343,23 @@ function saveEdit() {
             return;
         }
         
-        // Agregar el nuevo pago (permitir mismo nombre)
+        // Agregar el nuevo pago
         record.paymentHistory.push({
             amount: newPaymentAmount.toLocaleString(),
             person: quien,
             date: new Date().toLocaleDateString('es-ES')
         });
 
-        // Limpiar campos después de agregar pago
+        // ✅ Limpiar campos después de agregar pago
         document.getElementById('editPago').value = '';
+        document.getElementById('editPago').placeholder = '0.00';
         document.getElementById('editQuien').value = '';
+
+        // Enfocar en el campo de pago para siguiente entrada
+        const pagoInput = document.getElementById('editPago');
+        if (pagoInput) {
+            setTimeout(() => pagoInput.focus(), 100);
+        }
         
         // Recalcular totales
         const newTotalPaid = totalPaid + newPaymentAmount;
@@ -937,19 +1369,60 @@ function saveEdit() {
         record.pago = newTotalPaid.toLocaleString();
         record.pendiente = remaining.toLocaleString();
         
-        // FIXED: Consistent balance calculation
-        const importeNum = parseFloat(record.importe.replace(/,/g, '')) || 0;
-        record.balance = (importeNum + newTotalPaid).toLocaleString();
+        // ✅ CORRECCIÓN: Balance = Importe Original ± Total Pagado
+        let newBalance;
+        if (importeOriginal > 0) {
+            // Pago que hago: 2000 - 1000 = 1000 (lo que aún debo pagar)
+            newBalance = importeOriginal - newTotalPaid;
+        } else {
+            // Valores negativos (si los hay): -2000 + 1000 = -1000
+            newBalance = importeOriginal + newTotalPaid;
+        }
+        record.balance = newBalance.toLocaleString();
+
+        // ✅ NUEVO: Si este pago completa el total, mostrar modal de acreditación automáticamente
+        const isFullyPaidNow = remaining <= 0.01; // Tolerancia para centavos
+
+        if (isFullyPaidNow && !record.credited) {
+            // Sincronizar datos primero
+            filteredData[category][parseInt(index)] = {...record};
+            
+            // Actualizar UI
+            loadPaymentHistory(record);
+            updateCreditStatus(record);
+            renderTable(category);
+            updateTabCounts();
+            
+            // Mostrar modal de acreditación automáticamente
+            showStatus('✅ Pago completado. ¿Deseas acreditar este registro?', 'success');
+            
+            // Pequeño delay para que el usuario vea el mensaje
+            setTimeout(() => {
+                showCreditConfirmationModal(record);
+            }, 800);
+            
+            return; // Salir aquí para no cerrar el modal de edición aún
+        }
         
     } else {
         // Solo actualizar otros campos sin procesar pago
         if (pago) record.pago = pago;
-        if (pendiente) record.pendiente = pendiente;
     }
 
     // Actualizar color
     record.color = selectedColor ? selectedColor.dataset.color : 'none';
     record.quien = quien;
+
+    // ✅ NUEVO: Auto-acreditar si el tipo es ACC
+    if (record.tipo && record.tipo.toUpperCase() === 'ACC' && !record.credited) {
+        record.credited = true;
+        record.creditDate = new Date().toLocaleDateString('es-ES');
+        record.creditReason = 'paid';
+        record.creditNotes = 'Auto-acreditado por tipo ACC';
+        record.creditedBy = 'Sistema';
+        
+        showStatus('✅ Registro actualizado y auto-acreditado (tipo ACC)', 'success');
+    }
 
     // Sincronizar datos
     filteredData[category][parseInt(index)] = {...record};
@@ -959,7 +1432,9 @@ function saveEdit() {
     updateTabCounts();
     closeModal();
 
-    showStatus('✅ Registro actualizado exitosamente', 'success');
+    if (!record.credited || record.tipo.toUpperCase() !== 'ACC') {
+        showStatus('✅ Registro actualizado exitosamente', 'success');
+    }
 }
 
 function saveNewRecord() {
@@ -1049,7 +1524,26 @@ function saveNewRecord() {
 }
 
 function showStatus(message, type) {
-    status.innerHTML = message + (type === 'loading' ? '<span class="loading"></span>' : '');
+    status.innerHTML = '';
+    
+    if (type === 'loading') {
+        const container = document.createElement('div');
+        container.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px;';
+        
+        const textSpan = document.createElement('span');
+        textSpan.textContent = message;
+        textSpan.style.cssText = 'display: inline-block;';
+        
+        const spinner = document.createElement('span');
+        spinner.className = 'loading';
+        
+        container.appendChild(textSpan);
+        container.appendChild(spinner);
+        status.appendChild(container);
+    } else {
+        status.textContent = message;
+    }
+    
     status.className = `status ${type}`;
     status.style.display = 'block';
     
@@ -1085,9 +1579,9 @@ function getColorHex(color) {
 }
 
 function updateTabCounts() {
-    document.getElementById('creditosCount').textContent = allData.creditos.length;
     document.getElementById('serviciosCount').textContent = allData.servicios.length;
-    document.getElementById('stockCount').textContent = allData.stock.length;
+    document.getElementById('stockcompCount').textContent = allData.stockcomp.length;
+    document.getElementById('stocknumCount').textContent = allData.stocknum.length;
     document.getElementById('otrosCount').textContent = allData.otros.length;
 }
 
@@ -1120,9 +1614,9 @@ function showPreviewModal(newRecords) {
         previewModal.style.display = 'block';
         
         const categorizedNew = {
-            creditos: [],
             servicios: [],
-            stock: [],
+            stockcomp: [],
+            stocknum: [],
             otros: []
         };
         
@@ -1298,7 +1792,7 @@ function confirmDelete(category, index) {
 function renumberAllRecords() {
     let globalCounter = 1;
     
-    ['creditos', 'servicios', 'stock', 'otros'].forEach(category => {
+    ['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
         allData[category].forEach(record => {
             record.no = globalCounter.toString();
             globalCounter++;
@@ -1362,20 +1856,73 @@ function savePaymentEdit(paymentIndex) {
     const [category, index] = currentEditingId.split('_');
     const record = allData[category][parseInt(index)];
     if (!record || !record.paymentHistory || !record.paymentHistory[paymentIndex]) return;
+
+    const amountInput = document.getElementById('editPaymentAmount');
+    const personInput = document.getElementById('editPaymentPerson');
+    const dateInput = document.getElementById('editPaymentDate');
     
-    const newAmount = document.getElementById('editPaymentAmount').value;
-    const newPerson = document.getElementById('editPaymentPerson').value;
-    const newDate = document.getElementById('editPaymentDate').value;
+    const newAmount = amountInput.value.trim();
+    const newPerson = personInput.value.trim();
+    const newDate = dateInput.value;
+
+    // ✅ VALIDACIONES
+    const amount = parseFloat(newAmount.replace(/,/g, '')) || 0;
+    
+    if (amount <= 0) {
+        amountInput.style.borderColor = '#e74c3c';
+        amountInput.style.background = '#ffebee';
+        amountInput.focus();
+        showStatus('❌ El monto debe ser mayor a 0', 'error');
+        return;
+    }
+    
+    if (!newPerson || newPerson.length === 0) {
+        personInput.style.borderColor = '#e74c3c';
+        personInput.style.background = '#ffebee';
+        personInput.focus();
+        showStatus('❌ Debes especificar quién realizó el pago', 'error');
+        return;
+    }
+
+    if (!newDate) {
+        dateInput.style.borderColor = '#e74c3c';
+        dateInput.style.background = '#ffebee';
+        dateInput.focus();
+        showStatus('❌ Debes especificar la fecha del pago', 'error');
+        return;
+    }
     
     record.paymentHistory[paymentIndex] = {
         amount: parseFloat(newAmount.replace(/,/g, '')).toLocaleString(),
         person: newPerson.trim(),
         date: convertInputToDate(newDate)
     };
+
+    // ✅ NUEVO: Recalcular y verificar si debe desacreditar
+    const totalPaid = record.paymentHistory.reduce((sum, payment) => {
+        return sum + (parseFloat(payment.amount.replace(/,/g, '')) || 0);
+    }, 0);
+    
+    const originalAmount = Math.abs(parseFloat(record.importe.replace(/,/g, '')) || 0);
+    const remaining = originalAmount - totalPaid;
+    
+    // Si ahora hay pendiente y estaba acreditado → desacreditar
+    if (remaining > 0.01 && record.credited) {
+        record.credited = false;
+        record.creditDate = null;
+        record.creditReason = null;
+        record.creditNotes = null;
+        record.creditedBy = null;
+        
+        showStatus('⚠️ Pago editado. El registro ha sido desacreditado porque aún hay $' + remaining.toFixed(2) + ' pendientes.', 'error');
+    } else {
+        showStatus('✅ Pago actualizado exitosamente', 'success');
+    }
     
     filteredData[category][parseInt(index)] = {...record};
+    updateCreditStatus(record);
     loadPaymentHistory(record);
-    showStatus('✅ Pago actualizado exitosamente', 'success');
+    renderTable(category);
 }
 
 function deletePayment(paymentIndex) {
@@ -1456,6 +2003,19 @@ function confirmDeletePayment(paymentIndex) {
     }
     record.balance = newBalance.toLocaleString();
 
+    // ✅ NUEVO: Si ahora hay pendiente y estaba acreditado → desacreditar automáticamente
+    if (remaining > 0.01 && record.credited) {
+        record.credited = false;
+        record.creditDate = null;
+        record.creditReason = null;
+        record.creditNotes = null;
+        record.creditedBy = null;
+        
+        showStatus('⚠️ Pago eliminado. El registro ha sido desacreditado automáticamente porque aún hay $' + remaining.toFixed(2) + ' pendientes.', 'error');
+    } else {
+        showStatus('✅ Pago eliminado y totales recalculados', 'success');
+    }
+
     filteredData[category][parseInt(index)] = {...record};
     loadPaymentHistory(record);
     showStatus('✅ Pago eliminado y totales recalculados', 'success');
@@ -1491,6 +2051,7 @@ function exportPaymentHistory() {
 }
 
 // Función para validar monto de pago
+// REEMPLAZAR toda la función con esta versión mejorada:
 function validatePaymentAmount() {
     if (!currentEditingId) return true;
     
@@ -1499,7 +2060,8 @@ function validatePaymentAmount() {
     if (!record) return true;
     
     const pagoInput = document.getElementById('editPago');
-    const newPaymentAmount = parseFloat(pagoInput.value.replace(/,/g, '')) || 0;
+    const rawValue = pagoInput.value.replace(/,/g, '');
+    const newPaymentAmount = parseFloat(rawValue) || 0;
     
     if (newPaymentAmount <= 0) return true; // No validar si no hay monto
     
@@ -1512,10 +2074,22 @@ function validatePaymentAmount() {
     
     if (newPaymentAmount > maxAllowed) {
         pagoInput.style.borderColor = '#e74c3c';
-        pagoInput.title = `Máximo permitido: $${maxAllowed.toLocaleString()}`;
+        pagoInput.style.background = '#ffebee';
+        pagoInput.title = `Máximo permitido: $${maxAllowed.toFixed(2)}`;
+        
+        // Mostrar mensaje temporal
+        const errorMsg = document.createElement('div');
+        errorMsg.style.cssText = 'position: absolute; background: #e74c3c; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; margin-top: 2px; z-index: 1000;';
+        errorMsg.textContent = `⚠️ Máximo: $${maxAllowed.toFixed(2)}`;
+        pagoInput.parentElement.style.position = 'relative';
+        pagoInput.parentElement.appendChild(errorMsg);
+        
+        setTimeout(() => errorMsg.remove(), 3000);
+        
         return false;
     } else {
-        pagoInput.style.borderColor = '';
+        pagoInput.style.borderColor = '#4caf50';
+        pagoInput.style.background = '#e8f5e9';
         pagoInput.title = '';
         return true;
     }
@@ -1558,7 +2132,7 @@ function payTotal() {
     const pagoInput = document.getElementById('editPago');
     const quienInput = document.getElementById('editQuien');
     
-    pagoInput.value = remaining.toLocaleString();
+    pagoInput.value = remaining.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     
     // Focus en el campo de quién para completar el pago
     if (!quienInput.value) {
@@ -1597,7 +2171,7 @@ function quickPayment(percentage) {
     const pagoInput = document.getElementById('editPago');
     const quienInput = document.getElementById('editQuien');
     
-    pagoInput.value = paymentAmount.toLocaleString();
+    pagoInput.value = paymentAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     
     // Focus en el campo de quién
     if (!quienInput.value) {
@@ -1642,8 +2216,8 @@ function showCreditConfirmationModal(record) {
         return sum + (parseFloat(payment.amount.replace(/,/g, '')) || 0);
     }, 0);
     
-    const remaining = originalAmount - totalPaid;
-    const isFullyPaid = remaining <= 0;
+    const remaining = Math.max(0, originalAmount - totalPaid); // ✅ Asegurar que no sea negativo
+    const isFullyPaid = remaining <= 0.01; // ✅ Tolerancia para centavos
 
     const confirmModal = document.createElement('div');
     confirmModal.className = 'modal';
@@ -1660,9 +2234,9 @@ function showCreditConfirmationModal(record) {
                 <p><strong>Pendiente:</strong> $${remaining.toLocaleString()}</p>
             </div>
             
-            ${!isFullyPaid ? `
+            ${!isFullyPaid && remaining > 0.01 ? `
                 <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
-                    <strong>⚠️ Atención:</strong> Este registro aún tiene $${remaining.toLocaleString()} pendientes de pago.
+                    <strong>⚠️ Atención:</strong> Este registro aún tiene $${remaining.toFixed(2)} pendientes de pago.
                     <br>¿Deseas acreditarlo como pagado completamente?
                 </div>
             ` : `
@@ -1748,9 +2322,19 @@ function confirmCredit() {
             });
             
             // Update totals with consistent calculation
+            const importeOriginal = parseFloat(record.importe.replace(/,/g, '')) || 0;
             record.pago = originalAmount.toLocaleString();
-            record.balance = (parseFloat(record.importe.replace(/,/g, '')) + originalAmount).toLocaleString();
-            record.pendiente = "0";
+
+            // ✅ CORRECCIÓN: Balance correcto al acreditar
+            let newBalance;
+            if (importeOriginal > 0) {
+                // Pago completamente realizado: 2000 - 2000 = 0
+                newBalance = importeOriginal - originalAmount;
+            } else {
+                // Valores negativos: -2000 + 2000 = 0
+                newBalance = importeOriginal + originalAmount;
+            }
+            record.balance = newBalance.toLocaleString();
         }
     }
     
@@ -1761,6 +2345,11 @@ function confirmCredit() {
     renderTable(category);
     
     showStatus(`✅ Registro acreditado exitosamente por motivo: ${getCreditReasonText(reason)}`, 'success');
+
+    // ✅ Cerrar el modal de edición después de acreditar
+    setTimeout(() => {
+        closeModal();
+    }, 1500);
 }
 
 // Función para obtener texto del motivo de acreditación
@@ -1783,6 +2372,16 @@ function updateCreditStatus(record) {
     
     if (!statusIndicator || !statusText || !creditButton) return;
 
+    // Calcular estado de pago
+    const originalAmount = Math.abs(parseFloat(record.importe.replace(/,/g, '')) || 0);
+    const totalPaid = (record.paymentHistory || []).reduce((sum, payment) => {
+        return sum + (parseFloat(payment.amount.replace(/,/g, '')) || 0);
+    }, 0);
+    
+    const remaining = originalAmount - totalPaid;
+    const paymentPercentage = originalAmount > 0 ? (totalPaid / originalAmount) : 0;
+    const isFullyPaid = remaining <= 0.01; // Tolerancia para centavos
+
     if (record.credited) {
         // Estado: Acreditado
         statusIndicator.className = 'status-indicator credited';
@@ -1792,88 +2391,87 @@ function updateCreditStatus(record) {
         creditButton.textContent = '🔄 Desacreditar';
         creditButton.className = 'credit-btn credited';
         creditButton.title = 'Revertir acreditación';
+        creditButton.style.display = 'inline-block';
         
-    } else {
-        // Calcular estado basado en pagos
-        const originalAmount = Math.abs(parseFloat(record.importe.replace(/,/g, '')) || 0);
-        const totalPaid = (record.paymentHistory || []).reduce((sum, payment) => {
-            return sum + (parseFloat(payment.amount.replace(/,/g, '')) || 0);
-        }, 0);
-        
-        const remaining = originalAmount - totalPaid;
-        const paymentPercentage = originalAmount > 0 ? (totalPaid / originalAmount) : 0;
-        
-        if (remaining <= 0) {
-            // Completamente pagado
-            statusIndicator.className = 'status-indicator paid';
-            statusText.textContent = 'Pagado completamente';
-            statusIndicator.querySelector('.status-icon').textContent = '💚';
-        } else if (totalPaid > 0) {
-            // Pagado parcialmente
-            statusIndicator.className = 'status-indicator partial';
-            statusText.textContent = `Pagado ${(paymentPercentage * 100).toFixed(1)}%`;
-            statusIndicator.querySelector('.status-icon').textContent = '🔵';
-        } else {
-            // Pendiente
-            statusIndicator.className = 'status-indicator pending';
-            statusText.textContent = 'Pendiente de pago';
-            statusIndicator.querySelector('.status-icon').textContent = '⏳';
-        }
+    } else if (isFullyPaid) {
+        // ✅ Estado: Pagado completamente - MOSTRAR botón de acreditar
+        statusIndicator.className = 'status-indicator paid';
+        statusText.textContent = 'Pagado completamente';
+        statusIndicator.querySelector('.status-icon').textContent = '💚';
         
         creditButton.textContent = '✅ Acreditar';
         creditButton.className = 'credit-btn';
         creditButton.title = 'Marcar como acreditado';
+        creditButton.style.display = 'inline-block'; // ✅ MOSTRAR
+
+    } else if (totalPaid > 0) {
+        // ⏳ Estado: Pagado parcialmente - OCULTAR botón
+        statusIndicator.className = 'status-indicator partial';
+        statusText.textContent = `Pagado ${(paymentPercentage * 100).toFixed(1)}%`;
+        statusIndicator.querySelector('.status-icon').textContent = '🔵';
+        
+        creditButton.style.display = 'none'; // ✅ OCULTAR botón
+
+    } else {
+        // ⏳ Estado: Pendiente - OCULTAR botón
+        statusIndicator.className = 'status-indicator pending';
+        statusText.textContent = 'Pendiente de pago';
+        statusIndicator.querySelector('.status-icon').textContent = '⏳';
+        
+        creditButton.style.display = 'none'; // ✅ OCULTAR botón
     }
 }
 
-// FIXED: Consolidate DOMContentLoaded events
+// ✅ ÚNICO evento DOMContentLoaded consolidado
 document.addEventListener('DOMContentLoaded', function() {
     resetOptionsToDefault();
+
+    const globalExportButton = document.getElementById('globalExportButton');
+    if (globalExportButton) {
+        globalExportButton.addEventListener('click', exportGlobalExcel);
+    }
+
+    const exportBySourceButton = document.getElementById('exportBySourceButton');
+    if (exportBySourceButton) {
+        exportBySourceButton.addEventListener('click', exportBySourceFiles);
+    }
     
-    // Check required elements
+    // Verificar elementos requeridos
     const requiredElements = [
         'fileInput', 'passwordInput', 'processButton', 'dataSection', 'status', 'fileName',
-        'editModal', 'editPago', 'editQuien', 'editPendiente'
+        'editModal', 'editPago', 'editQuien'
     ];
     
     const missingElements = requiredElements.filter(id => !document.getElementById(id));
     if (missingElements.length > 0) {
-        console.error('Missing required elements:', missingElements);
+        console.error('Faltan elementos:', missingElements);
     }
 
-    // Add modal event listeners
+    // Event listeners de modales
     const addModal = document.getElementById('addModal');
     const editModal = document.getElementById('editModal');
     
     if (addModal) {
         addModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeAddModal();
-            }
+            if (e.target === this) closeAddModal();
         });
     }
     
     if (editModal) {
         editModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
+            if (e.target === this) closeModal();
         });
     }
     
-    // Keyboard event listeners
+    // Tecla Escape para cerrar modales
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            if (addModal && addModal.style.display === 'block') {
-                closeAddModal();
-            }
-            if (editModal && editModal.style.display === 'block') {
-                closeModal();
-            }
+            if (addModal && addModal.style.display === 'block') closeAddModal();
+            if (editModal && editModal.style.display === 'block') closeModal();
         }
     });
     
-    // Enter key listeners for add form
+    // Enter en formulario de agregar
     ['addTipo', 'addFactura', 'addReferencia', 'addFechaFactura', 'addFechaVencimiento', 'addImporte', 'addPago', 'addBalance'].forEach(inputId => {
         const input = document.getElementById(inputId);
         if (input) {
@@ -1886,7 +2484,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-complete fields
+    // Auto-completar campos
     const addImporte = document.getElementById('addImporte');
     const addFechaFactura = document.getElementById('addFechaFactura');
     
@@ -1910,33 +2508,440 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Payment validation
+    // ✅ Manejo del campo de pago con decimales
     const pagoInput = document.getElementById('editPago');
     if (pagoInput) {
-        pagoInput.addEventListener('input', validatePaymentAmount);
-        pagoInput.addEventListener('blur', validatePaymentAmount);
+        // Input: permitir solo números y punto decimal
+        pagoInput.addEventListener('input', function(e) {
+            let value = this.value;
+            value = value.replace(/[^\d.,]/g, '');
+            value = value.replace(/,/g, '');
+            
+            const parts = value.split('.');
+            if (parts.length > 2) {
+                value = parts[0] + '.' + parts.slice(1).join('');
+            }
+            
+            if (parts.length === 2 && parts[1].length > 2) {
+                value = parts[0] + '.' + parts[1].substring(0, 2);
+            }
+            
+            this.value = value;
+            validatePaymentAmount(); // Validar mientras escribe
+        });
+        
+        // Blur: formatear con comas
+        pagoInput.addEventListener('blur', function() {
+            const value = parseFloat(this.value.replace(/,/g, ''));
+            
+            if (!isNaN(value) && value > 0) {
+                this.value = value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            } else {
+                this.value = '';
+                this.placeholder = '0.00';
+            }
+        });
+        
+        // Focus: limpiar formato
+        pagoInput.addEventListener('focus', function() {
+            if (this.value === '' || this.value === '0' || this.value === '0.00') {
+                this.value = '';
+            } else {
+                const value = this.value.replace(/,/g, '');
+                this.value = value;
+            }
+        });
     }
     
-    // Number formatting
-    ['editPago', 'editPendiente'].forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.addEventListener('blur', function() {
-                const value = parseFloat(this.value.replace(/,/g, '')) || 0;
-                if (value > 0) {
-                    this.value = value.toLocaleString();
-                }
-            });
+    // Password input styling
+    passwordInput.addEventListener('input', function() {
+        const hasPassword = this.value.trim().length > 0;
+        
+        if (hasPassword) {
+            this.style.borderColor = '#4caf50';
+            this.style.background = '#e8f5e9';
+        } else {
+            this.style.borderColor = '';
+            this.style.background = '';
         }
     });
+    
+    // Doble click para mostrar/ocultar contraseña
+    passwordInput.addEventListener('dblclick', function() {
+        this.type = this.type === 'password' ? 'text' : 'password';
+    });
 });
+
+// ==================== EXPORTACIÓN GLOBAL ==================== 
+async function exportGlobalExcel() {
+    try {
+        // Verificar que hay datos
+        const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
+        
+        if (totalRecords === 0) {
+            showStatus('❌ No hay datos para exportar', 'error');
+            return;
+        }
+
+        // Preguntar si quiere proteger con contraseña
+        const password = prompt('🔐 ¿Deseas proteger el Excel con contraseña?\n\n(Dejar vacío para NO proteger)\n\nNOTA: Recuerda esta contraseña, la necesitarás para abrir el archivo.');
+
+        if (password === null) {
+            showStatus('❌ Exportación cancelada', 'error');
+            return;
+        }
+
+        showStatus('📊 Generando Excel completo...', 'loading');
+
+        // Determinar estado de cada registro
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const warningDate = new Date(today);
+        warningDate.setDate(warningDate.getDate() + 7);
+
+        // Combinar todos los registros en orden
+        const allRecords = [
+            ...allData.servicios,
+            ...allData.stockcomp,
+            ...allData.stocknum,
+            ...allData.otros
+        ].sort((a, b) => parseInt(a.no) - parseInt(b.no));
+
+        // Preparar datos con colores
+        const dataToExport = allRecords.map(record => {
+            let fillColor = null;
+            
+            if (record.credited) {
+                fillColor = 'FFE8F5E9'; // Verde
+            } else {
+                const vencimiento = parseDate(record.fechaVencimiento);
+                
+                if (vencimiento < today) {
+                    fillColor = 'FFFFEBEE'; // Rojo
+                } else if (vencimiento <= warningDate) {
+                    fillColor = 'FFFFF9C4'; // Amarillo
+                }
+            }
+
+            return {
+                no: record.no,
+                tipo: record.tipo,
+                factura: record.factura,
+                referencia: record.referencia,
+                fechaFactura: record.fechaFactura,
+                fechaVencimiento: record.fechaVencimiento,
+                moneda: record.moneda,
+                importe: record.importe,
+                pago: record.pago,
+                balance: record.balance,
+                fillColor: fillColor
+            };
+        });
+
+        // Enviar al servidor
+        const response = await fetch(`${API_URL}/api/export-excel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                data: dataToExport,
+                password: password || ''
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error en el servidor');
+        }
+
+        // Descargar archivo
+        const blob = await response.blob();
+        const fileName = `facturas_completas_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        const protectionMsg = password 
+            ? `🔐 Excel protegido con contraseña` 
+            : `📄 Excel sin protección`;
+
+        showStatus(`✅ ${protectionMsg}: ${fileName} (${totalRecords} registros)`, 'success');
+
+    } catch (error) {
+        console.error('Error exportando Excel:', error);
+        
+        if (error.message.includes('Python')) {
+            showStatus('❌ Error: Python no está disponible. El archivo se descargará sin contraseña.', 'error');
+        } else {
+            showStatus('❌ Error al exportar: ' + error.message, 'error');
+        }
+    }
+}
+
+// ==================== EXPORTACIÓN POR ARCHIVOS DE ORIGEN ==================== 
+async function exportBySourceFiles() {
+    try {
+        // Verificar que hay datos
+        const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
+        
+        if (totalRecords === 0) {
+            showStatus('❌ No hay datos para exportar', 'error');
+            return;
+        }
+
+        // Agrupar registros por archivo de origen
+        const recordsByFile = {};
+        
+        ['servicios', 'stockcomp', 'stocknum', 'otros'].forEach(category => {
+            allData[category].forEach(record => {
+                const fileId = record.sourceFileId || 'unknown';
+                const fileName = record.sourceFile || 'registros_manuales.xlsx';
+                
+                if (!recordsByFile[fileId]) {
+                    recordsByFile[fileId] = {
+                        fileName: fileName,
+                        records: []
+                    };
+                }
+                
+                recordsByFile[fileId].records.push(record);
+            });
+        });
+
+        const fileCount = Object.keys(recordsByFile).length;
+        
+        if (fileCount === 0) {
+            showStatus('❌ No se encontraron archivos de origen', 'error');
+            return;
+        }
+
+        // Si solo hay un archivo, exportar directamente
+        if (fileCount === 1) {
+            const fileData = Object.values(recordsByFile)[0];
+            showStatus(`📊 Exportando ${fileData.records.length} registros de "${fileData.fileName}"...`, 'loading');
+            await exportSingleFile(fileData.fileName, fileData.records);
+            return;
+        }
+
+        // Si hay múltiples archivos, preguntar si quiere ZIP o individual
+        const exportAll = confirm(
+            `📁 Se encontraron ${fileCount} archivos de origen con un total de ${totalRecords} registros.\n\n` +
+            `¿Deseas exportar todos como archivos separados?\n\n` +
+            `• OK = Exportar todos (descarga múltiple)\n` +
+            `• Cancelar = Elegir archivo específico`
+        );
+
+        if (exportAll) {
+            // Exportar todos los archivos
+            showStatus(`📦 Generando ${fileCount} archivos Excel...`, 'loading');
+            
+            let exported = 0;
+            let cancelled = 0;
+            
+            for (const [fileId, fileData] of Object.entries(recordsByFile)) {
+                try {
+                    await exportSingleFile(fileData.fileName, fileData.records);
+                    exported++;
+                    
+                    // Pequeña pausa entre descargas para evitar bloqueo del navegador
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                    if (error.message.includes('cancelada')) {
+                        cancelled++;
+                        console.log(`⏭️ Saltando "${fileData.fileName}"`);
+                        // Continuar con el siguiente archivo
+                        continue;
+                    } else {
+                        // Si es otro tipo de error, lanzarlo
+                        throw error;
+                    }
+                }
+            }
+            
+            if (exported > 0 && cancelled > 0) {
+                showStatus(`✅ ${exported} archivos exportados, ${cancelled} cancelados`, 'success');
+            } else if (exported > 0) {
+                showStatus(`✅ ${exported} archivos exportados exitosamente`, 'success');
+            } else {
+                showStatus(`⚠️ Todas las exportaciones fueron canceladas`, 'error');
+            }
+            
+        } else {
+            // Mostrar selector de archivo
+            showFileSelector(recordsByFile);
+        }
+
+    } catch (error) {
+        console.error('Error exportando por archivos:', error);
+        showStatus('❌ Error al exportar: ' + error.message, 'error');
+    }
+}
+
+// Función auxiliar para exportar un solo archivo
+async function exportSingleFile(originalFileName, records) {
+    try {
+        // Preguntar si quiere proteger con contraseña
+        const password = prompt(
+            `🔐 Proteger "${originalFileName}" con contraseña?\n\n` +
+            `(Dejar vacío para NO proteger)`
+        );
+
+        if (password === null) {
+            console.log(`⚠️ Exportación de "${originalFileName}" cancelada por el usuario`);
+            throw new Error('Exportación cancelada por el usuario');
+        }
+
+        // Determinar estado de cada registro
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const warningDate = new Date(today);
+        warningDate.setDate(warningDate.getDate() + 7);
+
+        // Ordenar registros
+        const sortedRecords = records.sort((a, b) => parseInt(a.no) - parseInt(b.no));
+
+        // Preparar datos con colores
+        const dataToExport = sortedRecords.map(record => {
+            let fillColor = null;
+            
+            if (record.credited) {
+                fillColor = 'FFE8F5E9';
+            } else {
+                const vencimiento = parseDate(record.fechaVencimiento);
+                
+                if (vencimiento < today) {
+                    fillColor = 'FFFFEBEE';
+                } else if (vencimiento <= warningDate) {
+                    fillColor = 'FFFFF9C4';
+                }
+            }
+
+            return {
+                no: record.no,
+                tipo: record.tipo,
+                factura: record.factura,
+                referencia: record.referencia,
+                fechaFactura: record.fechaFactura,
+                fechaVencimiento: record.fechaVencimiento,
+                moneda: record.moneda,
+                importe: record.importe,
+                pago: record.pago,
+                balance: record.balance,
+                fillColor: fillColor
+            };
+        });
+
+        // Enviar al servidor
+        const response = await fetch(`${API_URL}/api/export-excel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                data: dataToExport,
+                password: password || '',
+                originalFileName: originalFileName
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error en el servidor');
+        }
+
+        // Descargar archivo
+        const blob = await response.blob();
+        const exportFileName = originalFileName.replace('.xlsx', '') + 
+            `_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = exportFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        const protectionMsg = password ? `🔐 Protegido` : `📄 Sin protección`;
+        console.log(`✅ ${protectionMsg}: ${exportFileName} (${records.length} registros)`);
+
+    } catch (error) {
+        throw new Error(`Error exportando "${originalFileName}": ${error.message}`);
+    }
+}
+
+// Selector de archivo específico
+function showFileSelector(recordsByFile) {
+    const selectorModal = document.createElement('div');
+    selectorModal.className = 'modal';
+    selectorModal.style.display = 'block';
+    
+    const fileList = Object.entries(recordsByFile)
+        .map(([fileId, fileData]) => `
+            <div class="file-selector-item" onclick="selectFileToExport('${fileId}')">
+                <div class="file-icon">📄</div>
+                <div class="file-info">
+                    <div class="file-name">${fileData.fileName}</div>
+                    <div class="file-stats">${fileData.records.length} registros</div>
+                </div>
+            </div>
+        `).join('');
+    
+    selectorModal.innerHTML = `
+        <div class="modal-content">
+            <h3>📁 Selecciona el archivo a exportar</h3>
+            <div class="file-selector-list">
+                ${fileList}
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="this.closest('.modal').remove()">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(selectorModal);
+    
+    // Guardar referencia global para la función selectFileToExport
+    window.currentRecordsByFile = recordsByFile;
+    
+    selectorModal.addEventListener('click', function(e) {
+        if (e.target === selectorModal) {
+            selectorModal.remove();
+            delete window.currentRecordsByFile;
+        }
+    });
+}
+
+// Función para seleccionar y exportar archivo específico
+async function selectFileToExport(fileId) {
+    const recordsByFile = window.currentRecordsByFile;
+    const fileData = recordsByFile[fileId];
+    
+    if (!fileData) return;
+    
+    // Cerrar modal
+    document.querySelector('.modal').remove();
+    delete window.currentRecordsByFile;
+    
+    // Exportar
+    showStatus(`📊 Exportando "${fileData.fileName}"...`, 'loading');
+    await exportSingleFile(fileData.fileName, fileData.records);
+    showStatus(`✅ Archivo "${fileData.fileName}" exportado exitosamente`, 'success');
+}
 
 // Hacer funciones globales
 window.addNewRecord = addNewRecord;
 window.closeAddModal = closeAddModal;
 window.saveNewRecord = saveNewRecord;
-
-// Hacer funciones globales
 window.deleteRecord = deleteRecord;
 window.confirmDelete = confirmDelete;
 window.openEditModal = openEditModal;
@@ -1952,16 +2957,6 @@ window.payTotal = payTotal;
 window.quickPayment = quickPayment;
 window.creditRecord = creditRecord;
 window.confirmCredit = confirmCredit;
-
-// Event listeners para el modal
-document.getElementById('editModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeModal();
-    }
-});
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.getElementById('editModal').style.display === 'block') {
-        closeModal();
-    }
-});
+window.exportGlobalExcel = exportGlobalExcel;
+window.exportBySourceFiles = exportBySourceFiles;
+window.selectFileToExport = selectFileToExport;

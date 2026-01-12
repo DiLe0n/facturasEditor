@@ -1,0 +1,32 @@
+{
+  "name": "gestor-facturas",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de facturas con soporte para archivos Excel protegidos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "facturas",
+    "excel",
+    "exceljs"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "node-xlsx": "^0.23.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
+

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Facturas Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>    
+    <link rel="stylesheet" href="refacciones.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Gestor de Facturas</h1>
+            <p>Edita y gestiona tus datos de Excel de forma sencilla</p>
+        </div>
+
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv">
+                <label for="fileInput" class="file-button">
+                    📁 Seleccionar archivo (Excel o CSV)
+                </label>
+            </div>
+            <div id="fileName" style="margin-top: 10px; color: #666;"></div>
+            
+            <div class="password-section">
+                <input type="password" id="passwordInput" class="password-input" placeholder="Contraseña (si el archivo está protegido)">
+                <button id="processButton" class="process-button" disabled>
+                    🚀 Procesar archivo
+                </button>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 10px; border-left: 4px solid #4caf50;">
+                <strong>✅ Archivos con contraseña soportados</strong>
+                <p style="margin: 8px 0; font-size: 0.9rem; color: #2e7d32;">
+                    Esta versión usa procesamiento en servidor y <strong>soporta archivos XLSX protegidos con contraseña</strong>.
+                </p>
+            </div>
+            
+            <div id="status"></div>
+        </div>
+
+        
+
+        <div class="data-section" id="dataSection">
+            <div class="global-export-section">
+                <div class="export-options">
+                    <button id="globalExportButton" class="global-export-button primary">
+                        📊 Exportar Todo Unificado
+                    </button>
+                    <button id="exportBySourceButton" class="global-export-button secondary">
+                        📁 Exportar por Archivos de Origen
+                    </button>
+                </div>
+                <span class="export-info">Elige cómo exportar tus registros</span>
+            </div>
+            <!-- Pestañas para las diferentes categorías -->
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" data-category="servicios">
+                        🔧 Servicios <span class="tab-count" id="serviciosCount">0</span>
+                    </button>
+                    <button class="tab" data-category="stockcomp">
+                        📦 StockComp <span class="tab-count" id="stockcompCount">0</span>
+                    </button>
+                    <button class="tab" data-category="stocknum">
+                        🔢 Stock# <span class="tab-count" id="stocknumCount">0</span>
+                    </button>
+                    <button class="tab" data-category="otros">
+                        📋 Otros <span class="tab-count" id="otrosCount">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="servicios" class="tab-content active">
+                <div class="controls">
+                    <input type="text" id="searchInputServicios" class="search-input" placeholder="🔍 Buscar en servicios...">
+                    <button id="addButtonServicios" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar servicio</button>
+                    
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByServicios" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByServicios" class="sort-select">
+                            <option value="due-asc">Vencimiento ↑</option>
+                            <option value="due-desc">Vencimiento ↓</option>
+                            <option value="date-asc">Fecha factura ↑</option>
+                            <option value="date-desc">Fecha factura ↓</option>
+                            <option value="amount-asc">Monto ↑</option>
+                            <option value="amount-desc">Monto ↓</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="recordCountServicios" class="record-count"></div>
+                
+                <!-- TABLA DE FACTURAS VENCIDAS -->
+                <div id="overdueTableContainerServicios" class="table-container overdue-container" style="display: none;">
+                    <table id="overdueTableServicios">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overdueTableBodyServicios">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="warningTableContainerServicios" class="table-container warning-container" style="display: none;">
+                    <table id="warningTableServicios">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warningTableBodyServicios">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACTIVOS -->
+                <div class="table-container">
+                    <table id="dataTableServicios">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyServicios">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACREDITADOS -->
+                <div id="creditedTableContainerServicios" class="table-container credited-container" style="display: none;">
+                    <table id="creditedTableServicios">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="creditedTableBodyServicios">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="stockcomp" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputStockcomp" class="search-input" placeholder="🔍 Buscar en stockcomp...">
+                    <button id="addButtonStockcomp" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar stockcomp</button>
+
+                    <!-- CONTROLES DE AGRUPACIÓN PARA STOCKCOMP -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByStockcomp" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByStockcomp" class="sort-select">
+                            <option value="due-asc">Vencimiento ↓</option>
+                            <option value="due-desc">Vencimiento ↑</option>
+                            <option value="date-asc">Fecha factura ↓</option>
+                            <option value="date-desc">Fecha factura ↑</option>
+                            <option value="amount-asc">Monto ↓</option>
+                            <option value="amount-desc">Monto ↑</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="recordCountStockcomp" class="record-count"></div>
+                <!-- TABLA DE FACTURAS VENCIDAS -->
+                <div id="overdueTableContainerStockcomp" class="table-container overdue-container" style="display: none;">
+                    <table id="overdueTableStockcomp">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overdueTableBodyStockcomp">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="warningTableContainerStockcomp" class="table-container warning-container" style="display: none;">
+                    <table id="warningTableStockcomp">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warningTableBodyStockcomp">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACTIVOS -->
+                <div class="table-container">
+                    <table id="dataTableStockcomp">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyStockcomp">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACREDITADOS -->
+                <div id="creditedTableContainerStockcomp" class="table-container credited-container" style="display: none;">
+                    <table id="creditedTableStockcomp">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="creditedTableBodyStockcomp">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="stocknum" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputStocknum" class="search-input" placeholder="🔍 Buscar en stocknum...">
+                    <button id="addButtonStocknum" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar stocknum</button>
+
+                    <!-- CONTROLES DE AGRUPACIÓN PARA STOCKNUM -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByStocknum" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByStocknum" class="sort-select">
+                            <option value="due-asc">Vencimiento ↓</option>
+                            <option value="due-desc">Vencimiento ↑</option>
+                            <option value="date-asc">Fecha factura ↓</option>
+                            <option value="date-desc">Fecha factura ↑</option>
+                            <option value="amount-asc">Monto ↓</option>
+                            <option value="amount-desc">Monto ↑</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="recordCountStocknum" class="record-count"></div>
+                <!-- TABLA DE FACTURAS VENCIDAS -->
+                <div id="overdueTableContainerStocknum" class="table-container overdue-container" style="display: none;">
+                    <table id="overdueTableStocknum">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overdueTableBodyStocknum">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="warningTableContainerStocknum" class="table-container warning-container" style="display: none;">
+                    <table id="warningTableStocknum">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warningTableBodyStocknum">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACTIVOS -->
+                <div class="table-container">
+                    <table id="dataTableStocknum">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyStocknum">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACREDITADOS -->
+                <div id="creditedTableContainerStocknum" class="table-container credited-container" style="display: none;">
+                    <table id="creditedTableStocknum">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="creditedTableBodyStocknum">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="otros" class="tab-content">
+                <div class="controls">
+                    <input type="text" id="searchInputOtros" class="search-input" placeholder="🔍 Buscar en otros...">
+                    <button id="addButtonOtros" class="save-button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">➕ Agregar otro</button>
+                    
+                    <!-- CONTROLES DE AGRUPACIÓN PARA OTROS -->
+                    <div class="week-controls" style="margin-left: 20px; display: inline-flex; gap: 10px; align-items: center;">
+                        <label>Agrupar:</label>
+                        <select id="groupByOtros" class="group-select">
+                            <option value="none">Sin agrupar</option>
+                            <option value="week">Por semana</option>
+                            <option value="month">Por mes</option>
+                        </select>
+                        <select id="sortByOtros" class="sort-select">
+                            <option value="due-asc">Vencimiento ↓</option>
+                            <option value="due-desc">Vencimiento ↑</option>
+                            <option value="date-asc">Fecha factura ↓</option>
+                            <option value="date-desc">Fecha factura ↑</option>
+                            <option value="amount-asc">Monto ↓</option>
+                            <option value="amount-desc">Monto ↑</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="recordCountOtros" class="record-count"></div>
+                <!-- TABLA DE FACTURAS VENCIDAS -->
+                <div id="overdueTableContainerOtros" class="table-container overdue-container" style="display: none;">
+                    <table id="overdueTableOtros">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overdueTableBodyOtros">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="warningTableContainerOtros" class="table-container warning-container" style="display: none;">
+                    <table id="warningTableOtros">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warningTableBodyOtros">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACTIVOS -->
+                <div class="table-container">
+                    <table id="dataTableServicios">
+                        <!-- ... resto del código ... -->
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACTIVOS -->
+                <div class="table-container">
+                    <table id="dataTableOtros">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBodyOtros">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- TABLA DE REGISTROS ACREDITADOS -->
+                <div id="creditedTableContainerOtros" class="table-container credited-container" style="display: none;">
+                    <table id="creditedTableOtros">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Tipo</th>
+                                <th>Nº Factura</th>
+                                <th>Referencia</th>
+                                <th>Fecha Factura</th>
+                                <th>Vencimiento</th>
+                                <th>Moneda</th>
+                                <th>Importe</th>
+                                <th>Pago</th>
+                                <th>Balance</th>
+                                <th>Editar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="creditedTableBodyOtros">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar registro -->
+    <div id="editModal" class="modal">
+        <div class="modal-content-wide">
+            <h3>📝 Editar Registro</h3>
+            
+            <div class="modal-layout">
+                <!-- Panel izquierdo - Formulario -->
+                <div class="modal-form">
+                    <div class="form-group">
+                        <label>Color del registro:</label>
+                        <div class="color-options">
+                            <div class="color-option color-none" data-color="none" title="Sin color"></div>
+                            <div class="color-option color-red" data-color="red" title="Rojo"></div>
+                            <div class="color-option color-yellow" data-color="yellow" title="Amarillo"></div>
+                            <div class="color-option color-green" data-color="green" title="Verde"></div>
+                            <div class="color-option color-blue" data-color="blue" title="Azul"></div>
+                            <div class="color-option color-orange" data-color="orange" title="Naranja"></div>
+                            <div class="color-option color-purple" data-color="purple" title="Morado"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Monto pagado:</label>
+                        <div class="payment-amount-container">
+                            <input type="text" id="editPago" class="payment-amount-input" placeholder="0.00">
+                            <button type="button" class="pay-total-btn" onclick="payTotal()" title="Pagar el total pendiente">
+                                💯 Pagar Total
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>¿Quién realizó el pago?:</label>
+                        <input type="text" id="editQuien" placeholder="Nombre de la persona">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Estado del pago:</label>
+                        <div class="payment-status-container">
+                            <div class="status-indicator" id="paymentStatusIndicator">
+                                <span class="status-icon">⏳</span>
+                                <span class="status-text" id="paymentStatusText">Pendiente</span>
+                            </div>
+                            <button type="button" class="credit-btn" id="creditButton" onclick="creditRecord()" title="Marcar como acreditado">
+                                ✅ Acreditar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button type="button" class="quick-action-btn partial" onclick="quickPayment(0.5)" title="Pagar 50%">
+                            50%
+                        </button>
+                        <button type="button" class="quick-action-btn partial" onclick="quickPayment(0.75)" title="Pagar 75%">
+                            75%
+                        </button>
+                        <button type="button" class="quick-action-btn full" onclick="quickPayment(1)" title="Pagar 100%">
+                            100%
+                        </button>
+                    </div>
+                    
+                    <div class="modal-buttons">
+                        <button class="modal-button danger" onclick="deleteRecord()" style="background: #dc3545;">🗑️ Eliminar</button>
+                        <button class="modal-button secondary" onclick="closeModal()">Cancelar</button>
+                        <button class="modal-button primary" onclick="saveEdit()">Guardar</button>
+                    </div>
+                </div>
+                
+                <!-- Panel derecho - Historial -->
+                <div class="modal-history">
+                    <div class="history-header">
+                        <h4>📊 Historial de Pagos</h4>
+                        <button id="exportHistoryBtn" class="export-btn" onclick="exportPaymentHistory()" title="Exportar historial">
+                            📄 Exportar
+                        </button>
+                    </div>
+                    <div id="paymentHistory" class="payment-history">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                    <div class="history-summary">
+                        <div class="summary-item">
+                            <span>Total pagado:</span>
+                            <span id="totalPaid" class="amount">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Importe original:</span>
+                            <span id="originalAmount" class="amount">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Pendiente:</span>
+                            <span id="remainingAmount" class="amount">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar nuevo registro -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <h3>➕ Agregar Nuevo Registro</h3>
+            
+            <div class="form-group">
+                <label>Tipo:</label>
+                <input type="text" id="addTipo" placeholder="CM, FC, NC, etc.">
+            </div>
+            
+            <div class="form-group">
+                <label>Nº Factura:</label>
+                <input type="text" id="addFactura" placeholder="ESCN0311063">
+            </div>
+            
+            <div class="form-group">
+                <label>N° de referencia:</label>
+                <input type="text" id="addReferencia" placeholder="ESIN1003196, RNN0997105, STOCK001234">
+            </div>
+            
+            <div class="form-group">
+                <label>Fecha Factura (DD/MM/YYYY):</label>
+                <input type="text" id="addFechaFactura" placeholder="12/05/2025">
+            </div>
+            
+            <div class="form-group">
+                <label>Fecha de vencimiento (DD/MM/YYYY):</label>
+                <input type="text" id="addFechaVencimiento" placeholder="12/05/2025">
+            </div>
+            
+            <div class="form-group">
+                <label>Moneda:</label>
+                <select id="addMoneda" style="width: 100%; padding: 12px; border: 2px solid var(--gris); border-radius: 8px; font-size: 1rem;">
+                    <option value="MXN">MXN</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Importe Factura:</label>
+                <input type="text" id="addImporte" placeholder="-2,034.62">
+            </div>
+            
+            <div class="form-group">
+                <label>Importe de pago:</label>
+                <input type="text" id="addPago" placeholder="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Balance:</label>
+                <input type="text" id="addBalance" placeholder="-2,034.62">
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeAddModal()">❌ Cancelar</button>
+                <button class="modal-button primary" onclick="saveNewRecord()">💾 Guardar Registro</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="refacciones.js"></script>
+</body>
+</html>
